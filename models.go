@@ -28,14 +28,14 @@ func (nt NullTime) Value() (driver.Value, error) {
 }
 
 type dbUsers struct {
-	ID        int
-	TUserID   int
-	FirstName string
-	LastName  string
-	Admin     int
-	Status    string
-	ChangedBy int
-	ChangedAt NullTime
+	ID         int
+	TelegramID int
+	FirstName  string
+	LastName   string
+	Admin      int
+	Status     string
+	ChangedBy  int
+	ChangedAt  NullTime
 }
 
 type dbTasks struct {

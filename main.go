@@ -21,10 +21,10 @@ var cache map[int]*UserCache
 var taskRules map[string]map[string]AllowedActions
 
 const (
-	NEWUSER_ADD     = "NEWUSER_ADD"
-	NEWUSER_CANCEL  = "NEWUSER_CANCEL"
-	NEWUSER_ACCEPT  = "NEWUSER_ACCEPT"
-	NEWUSER_DECLINE = "NEWUSER_DECLINE"
+	NewUserRequest = "NewUserRequest"
+	NewUserCancel  = "NewUserCancel"
+	NewUserAccept  = "NewUserAccept"
+	NewUserDecline = "NewUserDecline"
 )
 
 const (
@@ -112,7 +112,7 @@ func main() {
 			if update.CallbackQuery != nil {
 
 				if u.ID == 0 {
-					c.User.TUserID = tgid
+					c.User.TelegramID = tgid
 					c.User.FirstName = update.CallbackQuery.From.FirstName
 					c.User.LastName = update.CallbackQuery.From.LastName
 				}
@@ -238,44 +238,6 @@ func initDB() {
 		log.Fatal(err)
 	}
 
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS 'notifications'(
-			'id' INTEGER PRIMARY KEY AUTOINCREMENT,
-			'tgid' INTEGER,
-			'message_id' INTEGER,
-			'action' TEXT);`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-}
-
-func serveStart(update tgbotapi.Update) {
-
-	//ut := update.Message.From
-	//
-	//reply := fmt.Sprintf("Hello, %s %s. I can see you are new one here. Would you like to send request to approve your accont in Taskeram?\n", ut.FirstName, ut.LastName)
-	//
-	//btn1 := tgbotapi.NewKeyboardButton("Button 1")
-	//btn2 := tgbotapi.NewKeyboardButton("Button 2")
-	//btnRow := tgbotapi.NewKeyboardButtonRow(btn1, btn2)
-	//markup := tgbotapi.NewReplyKeyboard(btnRow)
-	//markup.Selective = true
-	//
-	//msg := tgbotapi.NewMessage(update.Message.Chat.ID, "New")
-	//msg.ReplyMarkup = markup
-	//bot.Send(msg)
-	//
-	//return
-	//
-	//btnYes := tgbotapi.NewInlineKeyboardButtonData("✓ Yes", NEWUSER_ADD)
-	//btnNo := tgbotapi.NewInlineKeyboardButtonData("🚫 No", NEWUSER_CANCEL)
-	//keyboard := tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(btnYes, btnNo))
-	//
-	//msg = tgbotapi.NewMessage(update.Message.Chat.ID, reply)
-	//msg.ReplyMarkup = &keyboard
-	//
-	//bot.Send(msg)
 }
 
 //запропонуємо користувачу зробити запит на активацію в програмі
@@ -285,8 +247,8 @@ func serveNewUser(update tgbotapi.Update) {
 
 	reply := fmt.Sprintf("Hello, %s %s. I can see you are new one here. Would you like to send request to approve your account in Taskeram?\n", ut.FirstName, ut.LastName)
 
-	btnYes := tgbotapi.NewInlineKeyboardButtonData("✓ Yes", NEWUSER_ADD)
-	btnNo := tgbotapi.NewInlineKeyboardButtonData("🚫 No", NEWUSER_CANCEL)
+	btnYes := tgbotapi.NewInlineKeyboardButtonData("✓ Yes", NewUserRequest)
+	btnNo := tgbotapi.NewInlineKeyboardButtonData("🚫 No", NewUserCancel)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(btnYes, btnNo))
 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, reply)
@@ -543,7 +505,7 @@ func handleUsersViewALl(c *UserCache) {
 	var u dbUsers
 
 	for rows.Next() {
-		rows.Scan(&u.TUserID, &u.FirstName, &u.LastName)
+		rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
 		xs = append(xs, u)
 	}
 
@@ -553,7 +515,7 @@ func handleUsersViewALl(c *UserCache) {
 	bot.Send(msg)
 
 	for key, val := range xs {
-		reply = fmt.Sprintf(`#%v <a href="tg://user?id=%v">%v %v</a>`, key+1, val.TUserID, val.FirstName, val.LastName)
+		reply = fmt.Sprintf(`#%v <a href="tg://user?id=%v">%v %v</a>`, key+1, val.TelegramID, val.FirstName, val.LastName)
 		msg := tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ParseMode = "HTML"
 		bot.Send(msg)
@@ -591,7 +553,7 @@ func handleUsersViewRequests(c *UserCache) {
 	var u dbUsers
 
 	for rows.Next() {
-		rows.Scan(&u.TUserID, &u.FirstName, &u.LastName)
+		rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
 		xs = append(xs, u)
 	}
 
@@ -601,7 +563,7 @@ func handleUsersViewRequests(c *UserCache) {
 	bot.Send(msg)
 
 	for key, val := range xs {
-		reply = fmt.Sprintf(`#%v <a href="tg://user?id=%v">%v %v</a>`, key+1, val.TUserID, val.FirstName, val.LastName)
+		reply = fmt.Sprintf(`#%v <a href="tg://user?id=%v">%v %v</a>`, key+1, val.TelegramID, val.FirstName, val.LastName)
 		msg := tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ParseMode = "HTML"
 		bot.Send(msg)
@@ -639,7 +601,7 @@ func handleUsersViewBanned(c *UserCache) {
 	var u dbUsers
 
 	for rows.Next() {
-		rows.Scan(&u.TUserID, &u.FirstName, &u.LastName)
+		rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
 		xs = append(xs, u)
 	}
 
@@ -649,7 +611,7 @@ func handleUsersViewBanned(c *UserCache) {
 	bot.Send(msg)
 
 	for key, val := range xs {
-		reply = fmt.Sprintf(`#%v <a href="tg://user?id=%v">%v %v</a>`, key+1, val.TUserID, val.FirstName, val.LastName)
+		reply = fmt.Sprintf(`#%v <a href="tg://user?id=%v">%v %v</a>`, key+1, val.TelegramID, val.FirstName, val.LastName)
 		msg := tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ParseMode = "HTML"
 		bot.Send(msg)
@@ -712,7 +674,7 @@ func handleUsersEditApprove(c *UserCache) {
 				u.status=?
 				AND u.tgid!=?	 
 			ORDER BY
-				u.id`, models.UserRequested, c.User.TUserID)
+				u.id`, models.UserRequested, c.User.TelegramID)
 		if err != nil {
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while taking approving list :(")
 			msg.ReplyToMessageID = c.MessageID
@@ -725,7 +687,7 @@ func handleUsersEditApprove(c *UserCache) {
 
 		i := 1
 		for rows.Next() {
-			rows.Scan(&u.ID, &u.TUserID, &u.FirstName, &u.LastName)
+			rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName)
 			users[i] = u
 			i++
 		}
@@ -772,7 +734,7 @@ func handleUsersEditApprove(c *UserCache) {
 		}
 
 		timeNow := time.Now().UTC()
-		_, err = stmt.Exec(models.UserApprowed, timeNow, c.User.TUserID, u.TUserID)
+		_, err = stmt.Exec(models.UserApprowed, timeNow, c.User.TelegramID, u.TelegramID)
 		if err != nil {
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while approving user :(")
 			msg.ReplyToMessageID = c.MessageID
@@ -781,8 +743,8 @@ func handleUsersEditApprove(c *UserCache) {
 			return
 		}
 
-		reply := fmt.Sprintf(`Your account has been <b>approved</b> by <a href="tg://user?id=%v">%v %v</a> at %v`, c.User.TUserID, c.User.FirstName, c.User.LastName, timeNow)
-		msg := tgbotapi.NewMessage(int64(u.TUserID), reply)
+		reply := fmt.Sprintf(`Your account has been <b>approved</b> by <a href="tg://user?id=%v">%v %v</a> at %v`, c.User.TelegramID, c.User.FirstName, c.User.LastName, timeNow)
+		msg := tgbotapi.NewMessage(int64(u.TelegramID), reply)
 		msg.ParseMode = "HTML"
 		bot.Send(msg)
 
@@ -824,7 +786,7 @@ func handleUsersEditApprove(c *UserCache) {
 
 	u = users[editingUser]
 
-	reply := fmt.Sprintf(`You moderating: <a href="tg://user?id=%v">%v %v</a>`, u.TUserID, u.FirstName, u.LastName)
+	reply := fmt.Sprintf(`You moderating: <a href="tg://user?id=%v">%v %v</a>`, u.TelegramID, u.FirstName, u.LastName)
 	msg := tgbotapi.NewMessage(c.ChatID, reply)
 	msg.ParseMode = "HTML"
 
@@ -874,7 +836,7 @@ func handleUsersEditBan(c *UserCache) {
 				(u.status=? OR u.status=?)
 				AND u.tgid!=?
 			ORDER BY
-				u.id`, models.UserRequested, models.UserApprowed, c.User.TUserID)
+				u.id`, models.UserRequested, models.UserApprowed, c.User.TelegramID)
 		if err != nil {
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while taking users list :(")
 			msg.ReplyToMessageID = c.MessageID
@@ -887,7 +849,7 @@ func handleUsersEditBan(c *UserCache) {
 
 		i := 1
 		for rows.Next() {
-			rows.Scan(&u.ID, &u.TUserID, &u.FirstName, &u.LastName, &u.Status)
+			rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName, &u.Status)
 			users[i] = u
 			i++
 		}
@@ -934,7 +896,7 @@ func handleUsersEditBan(c *UserCache) {
 		}
 
 		timeNow := time.Now().UTC()
-		_, err = stmt.Exec(models.UserBanned, timeNow, c.User.TUserID, u.TUserID)
+		_, err = stmt.Exec(models.UserBanned, timeNow, c.User.TelegramID, u.TelegramID)
 		if err != nil {
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while banning user :(")
 			msg.ReplyToMessageID = c.MessageID
@@ -944,12 +906,12 @@ func handleUsersEditBan(c *UserCache) {
 		}
 
 		if u.Status != models.UserApprowed {
-			reply = fmt.Sprintf(`Unfortunately your request has been <b>declined</b> by <a href="tg://user?id=%v">%v %v</a> at %v. Try to text to admin`, c.User.TUserID, c.User.FirstName, c.User.LastName, timeNow)
+			reply = fmt.Sprintf(`Unfortunately your request has been <b>declined</b> by <a href="tg://user?id=%v">%v %v</a> at %v. Try to text to admin`, c.User.TelegramID, c.User.FirstName, c.User.LastName, timeNow)
 		} else {
-			reply = fmt.Sprintf(`Unfortunately your account has been <b>banned</b> by <a href="tg://user?id=%v">%v %v</a> at %v. Try to text to admin`, c.User.TUserID, c.User.FirstName, c.User.LastName, timeNow)
+			reply = fmt.Sprintf(`Unfortunately your account has been <b>banned</b> by <a href="tg://user?id=%v">%v %v</a> at %v. Try to text to admin`, c.User.TelegramID, c.User.FirstName, c.User.LastName, timeNow)
 		}
 
-		msg := tgbotapi.NewMessage(int64(u.TUserID), reply)
+		msg := tgbotapi.NewMessage(int64(u.TelegramID), reply)
 		msg.ParseMode = "HTML"
 		bot.Send(msg)
 
@@ -991,7 +953,7 @@ func handleUsersEditBan(c *UserCache) {
 
 	u = users[currentUser]
 
-	reply = fmt.Sprintf(`You moderating: <a href="tg://user?id=%v">%v %v</a>`, u.TUserID, u.FirstName, u.LastName)
+	reply = fmt.Sprintf(`You moderating: <a href="tg://user?id=%v">%v %v</a>`, u.TelegramID, u.FirstName, u.LastName)
 	msg := tgbotapi.NewMessage(c.ChatID, reply)
 	msg.ParseMode = "HTML"
 
@@ -1040,7 +1002,7 @@ func handleUsersEditUnban(c *UserCache) {
 				u.status=?
 				AND u.tgid!=?
 			ORDER BY
-				u.id`, models.UserBanned, c.User.TUserID)
+				u.id`, models.UserBanned, c.User.TelegramID)
 		if err != nil {
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while taking ban list :(")
 			msg.ReplyToMessageID = c.MessageID
@@ -1053,7 +1015,7 @@ func handleUsersEditUnban(c *UserCache) {
 
 		i := 1
 		for rows.Next() {
-			rows.Scan(&u.ID, &u.TUserID, &u.FirstName, &u.LastName)
+			rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName)
 			users[i] = u
 			i++
 		}
@@ -1100,7 +1062,7 @@ func handleUsersEditUnban(c *UserCache) {
 		}
 
 		timeNow := time.Now().UTC()
-		_, err = stmt.Exec(models.UserApprowed, timeNow, c.User.TUserID, u.TUserID)
+		_, err = stmt.Exec(models.UserApprowed, timeNow, c.User.TelegramID, u.TelegramID)
 		if err != nil {
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while unbanning user :(")
 			msg.ReplyToMessageID = c.MessageID
@@ -1109,8 +1071,8 @@ func handleUsersEditUnban(c *UserCache) {
 			return
 		}
 
-		reply := fmt.Sprintf(`Your account has been <b>unbanned</b> by <a href="tg://user?id=%v">%v %v</a> at %v. Try to text to admin`, c.User.TUserID, c.User.FirstName, c.User.LastName, timeNow)
-		msg := tgbotapi.NewMessage(int64(u.TUserID), reply)
+		reply := fmt.Sprintf(`Your account has been <b>unbanned</b> by <a href="tg://user?id=%v">%v %v</a> at %v. Try to text to admin`, c.User.TelegramID, c.User.FirstName, c.User.LastName, timeNow)
+		msg := tgbotapi.NewMessage(int64(u.TelegramID), reply)
 		msg.ParseMode = "HTML"
 		bot.Send(msg)
 
@@ -1152,7 +1114,7 @@ func handleUsersEditUnban(c *UserCache) {
 
 	u = users[currentUser]
 
-	reply := fmt.Sprintf(`You moderating: <a href="tg://user?id=%v">%v %v</a>`, u.TUserID, u.FirstName, u.LastName)
+	reply := fmt.Sprintf(`You moderating: <a href="tg://user?id=%v">%v %v</a>`, u.TelegramID, u.FirstName, u.LastName)
 	msg := tgbotapi.NewMessage(c.ChatID, reply)
 	msg.ParseMode = "HTML"
 
@@ -1240,7 +1202,7 @@ func handleInboxNew(c *UserCache) {
 			t.to_user=?
 			AND t.status=?
 		ORDER BY
-			t.id`, c.User.TUserID, models.New)
+			t.id`, c.User.TelegramID, models.New)
 		if err != nil {
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting new tasks")
 			msg.ParseMode = "HTML"
@@ -1360,7 +1322,7 @@ func handleNew(c *UserCache) {
 
 			i := 1
 			for rows.Next() {
-				rows.Scan(&u.TUserID, &u.FirstName, &u.LastName)
+				rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
 
 				users[i] = u
 				i++
@@ -1428,7 +1390,7 @@ func handleNew(c *UserCache) {
 			reply := fmt.Sprintf(`<b>New task</b>
 			To user: <a href="tg://user?id=%v">%v %v</a>
 			
-			Enter task title <i>(then press Enter)</i>:`, toUser.TUserID, toUser.FirstName, toUser.LastName)
+			Enter task title <i>(then press Enter)</i>:`, toUser.TelegramID, toUser.FirstName, toUser.LastName)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
 			msg.ReplyMarkup = markup
@@ -1459,7 +1421,7 @@ func handleNew(c *UserCache) {
 			reply := fmt.Sprintf(`<b>New task</b>
 			To user: <a href="tg://user?id=%v">%v %v</a>
 			
-			Enter task title <i>(then press Enter)</i>:`, toUser.TUserID, toUser.FirstName, toUser.LastName)
+			Enter task title <i>(then press Enter)</i>:`, toUser.TelegramID, toUser.FirstName, toUser.LastName)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
 			msg.ReplyMarkup = markup
@@ -1479,7 +1441,7 @@ func handleNew(c *UserCache) {
 			To user: <a href="tg://user?id=%v">%v %v</a>
 			Title: %v
 			
-			Enter task description:`, toUser.TUserID, toUser.FirstName, toUser.LastName, c.Text)
+			Enter task description:`, toUser.TelegramID, toUser.FirstName, toUser.LastName, c.Text)
 
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
@@ -1512,7 +1474,7 @@ func handleNew(c *UserCache) {
 			To user: <a href="tg://user?id=%v">%v %v</a>
 			Title: %v
 			
-			Enter task description:`, toUser.TUserID, toUser.FirstName, toUser.LastName, c.NewTask.Title)
+			Enter task description:`, toUser.TelegramID, toUser.FirstName, toUser.LastName, c.NewTask.Title)
 
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
@@ -1531,7 +1493,7 @@ func handleNew(c *UserCache) {
 			reply := fmt.Sprintf(`<b>New task</b>
 			To user: <a href="tg://user?id=%v">%v %v</a>
 			Title: %v
-			Description: %v`, toUser.TUserID, toUser.FirstName, toUser.LastName, c.NewTask.Title, c.Text)
+			Description: %v`, toUser.TelegramID, toUser.FirstName, toUser.LastName, c.NewTask.Title, c.Text)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
 			msg.ReplyMarkup = markup
@@ -1567,7 +1529,7 @@ func handleNew(c *UserCache) {
 				return
 			}
 
-			res, err := stmt.Exec(c.User.TUserID, toUser.TUserID, models.TaskStatusNew, createdAt, c.User.ID, c.NewTask.Title, c.NewTask.Description)
+			res, err := stmt.Exec(c.User.TelegramID, toUser.TelegramID, models.TaskStatusNew, createdAt, c.User.ID, c.NewTask.Title, c.NewTask.Description)
 			if err != nil {
 				msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while saving task")
 				bot.Send(msg)
@@ -1588,20 +1550,20 @@ func handleNew(c *UserCache) {
 			reply := fmt.Sprintf(`<b>Task #%v</b>
 				To user: <a href="tg://user?id=%v">%v %v</a>
 				Title: %v
-				Description: %v`, taskID, toUser.TUserID, toUser.FirstName, toUser.LastName, c.NewTask.Title, c.NewTask.Description)
+				Description: %v`, taskID, toUser.TelegramID, toUser.FirstName, toUser.LastName, c.NewTask.Title, c.NewTask.Description)
 
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
 			bot.Send(msg)
 
-			if c.User.TUserID != toUser.TUserID {
+			if c.User.TelegramID != toUser.TelegramID {
 				reply = fmt.Sprintf(`<b>You have new task #%v</b>				
 				Title: %v
 				Description: %v
 
 				Task manager: <a href="tg://user?id=%v">%v %v</a>
 				Created at: %v`, taskID, c.NewTask.Title, c.NewTask.Description, c.User.ID, c.User.FirstName, c.User.LastName, createdAt)
-				msg = tgbotapi.NewMessage(int64(toUser.TUserID), reply)
+				msg = tgbotapi.NewMessage(int64(toUser.TelegramID), reply)
 				msg.ParseMode = "HTML"
 				_, err := bot.Send(msg)
 				if err != nil {
@@ -1652,48 +1614,6 @@ func handleComment(c *UserCache) {
 	handleMain(c)
 }
 
-func notifyNewUserRequest(userID int) {
-
-	rows, err := db.Query(`
-		SELECT 
-			u.tgid
-		FROM users u
-		WHERE
-			u.admin=1`)
-	if err != nil {
-		return
-	}
-
-	u := getUserByID(userID)
-
-	for rows.Next() {
-
-		dataYes := fmt.Sprintf("%v|%s", NEWUSER_ACCEPT, userID)
-		dataNo := fmt.Sprintf("%v|%s", NEWUSER_DECLINE, userID)
-
-		btnYes := tgbotapi.NewInlineKeyboardButtonData("✓ Accept", dataYes)
-		btnNo := tgbotapi.NewInlineKeyboardButtonData("🚫 Decline", dataNo)
-		keyboard := tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(btnYes, btnNo))
-
-		reply := fmt.Sprintln("New users request\nFirst name:%v\nLast name: %v", u.FirstName, u.LastName)
-
-		msg := tgbotapi.NewMessage(int64(userID), reply)
-		msg.ReplyMarkup = &keyboard
-
-		msgSent, err := bot.Send(msg)
-		if err != nil {
-			return
-		}
-
-		var n dbNotifications
-		n.TUserID = userID
-		n.MessageID = msgSent.MessageID
-		n.ACTION = ACTION_USERREQUEST
-
-		setNotification(n)
-	}
-}
-
 func getUserByTelegramID(userid int) dbUsers {
 
 	var u dbUsers
@@ -1715,135 +1635,10 @@ func getUserByTelegramID(userid int) dbUsers {
 	defer rows.Close()
 
 	if rows.Next() {
-		rows.Scan(&u.ID, &u.TUserID, &u.FirstName, &u.LastName, &u.Admin, &u.Status)
+		rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName, &u.Admin, &u.Status)
 	}
 
 	return u
-}
-
-func getUserByID(userid int) dbUsers {
-
-	var u dbUsers
-
-	rows, err := db.Query(`
-		SELECT
-			u.id,
-			u.tgid,
-			u.first_name,
-			u.last_name,
-			u.admin,
-			u.status
-		FROM users u
-		WHERE
-			id=?`, userid)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	defer rows.Close()
-
-	if rows.Next() {
-		rows.Scan(&u.ID, &u.TUserID, &u.FirstName, &u.LastName, &u.Admin, &u.Status)
-	}
-
-	return u
-}
-
-func setNotification(n dbNotifications) {
-
-	stmt, err := db.Prepare(`INSERT INTO notifications(tuserid, message_id, action) VALUES (?,?,?)`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = stmt.Exec(n.TUserID, n.MessageID, n.ACTION)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func getNotifications(userID int, action string) []dbNotifications {
-
-	var xs []dbNotifications
-	var n dbNotifications
-
-	rows, err := db.Query(`
-		SELECT 
-			tgid,
-			message_id
-		FROM notifications
-		WHERE
-			tgid=?
-			AND action=?
-		`, userID, action)
-	if err != nil {
-		return xs
-	}
-
-	for rows.Next() {
-		rows.Scan(&n.TUserID, &n.ACTION)
-		xs = append(xs, n)
-	}
-
-	return xs
-}
-
-func declineNewUser(userID int) {
-
-	stmt, err := db.Prepare(`
-		UPDATE 
-			users
-		SET 
-			status=?
-		WHERE
-			tgid=?`)
-
-	if err != nil {
-		return
-	}
-
-	_, err = stmt.Exec(models.UserBanned, userID)
-
-	xs := getNotifications(userID, ACTION_USERREQUEST)
-
-	u := getUserByTelegramID(userID)
-
-	for _, val := range xs {
-		reply := fmt.Sprintln("User: %s %s\n has been banned", u.FirstName, u.LastName)
-		updMsg := tgbotapi.NewEditMessageText(int64(val.TUserID), val.MessageID, reply)
-		bot.Send(updMsg)
-	}
-
-	msg := tgbotapi.NewMessage(int64(userID), "Sorry, your request was denied")
-	bot.Send(msg)
-}
-
-func acceptNewUser(userID int) {
-	stmt, err := db.Prepare(`
-		UPDATE 
-			users
-		SET 
-			status=?
-		WHERE
-			tgid=?`)
-
-	if err != nil {
-		return
-	}
-
-	_, err = stmt.Exec(models.UserRequested, userID)
-
-	xs := getNotifications(userID, ACTION_USERREQUEST)
-
-	u := getUserByTelegramID(userID)
-
-	for _, val := range xs {
-		reply := fmt.Sprintln("User: %s %s\n has been activated", u.FirstName, u.LastName)
-		updMsg := tgbotapi.NewEditMessageText(int64(val.TUserID), val.MessageID, reply)
-		bot.Send(updMsg)
-	}
-
-	msg := tgbotapi.NewMessage(int64(userID), "Congratulations, your request has been confirmed")
-	bot.Send(msg)
 }
 
 func handleCallbackQuery(c *UserCache) {
@@ -1860,15 +1655,15 @@ func handleCallbackQuery(c *UserCache) {
 	do := xs[0]
 
 	switch do {
-	case NEWUSER_CANCEL:
+	case NewUserCancel:
 		newUserCancel(c)
-	case NEWUSER_ADD:
+	case NewUserRequest:
 		newUserAdd(c)
-	case NEWUSER_DECLINE:
+	case NewUserDecline:
 		if len(xs) == 2 {
 			newUserDecline(c, xs[1])
 		}
-	case NEWUSER_ACCEPT:
+	case NewUserAccept:
 		if len(xs) == 2 {
 			newUserAccpet(c, xs[1])
 		}
@@ -1949,7 +1744,7 @@ func newUserAdd(c *UserCache) {
 			u.id
 		FROM users u
 		WHERE
-			u.tgid=?`, c.User.TUserID)
+			u.tgid=?`, c.User.TelegramID)
 	if err != nil {
 		cbConfig.Text = fmt.Sprintf("Dear, %s %s. sorry, somethings went wrong. Try make request later", c.User.FirstName, c.User.LastName)
 		bot.AnswerCallbackQuery(cbConfig)
@@ -1974,7 +1769,7 @@ func newUserAdd(c *UserCache) {
 		return
 	}
 
-	res, err := stmt.Exec(c.User.TUserID, c.User.FirstName, c.User.LastName, models.UserRequested, c.User.TUserID, time.Now().UTC())
+	res, err := stmt.Exec(c.User.TelegramID, c.User.FirstName, c.User.LastName, models.UserRequested, c.User.TelegramID, time.Now().UTC())
 	if err != nil {
 		cbConfig.Text = fmt.Sprintf("Dear, %s %s. sorry, somethings went wrong. Try make request later", c.User.FirstName, c.User.LastName)
 		bot.AnswerCallbackQuery(cbConfig)
@@ -2010,15 +1805,17 @@ func newUserAdd(c *UserCache) {
 
 	var u dbUsers
 	for rows.Next() {
-		rows.Scan(&u.TUserID)
+		rows.Scan(&u.TelegramID)
 
-		btnApprove := tgbotapi.NewInlineKeyboardButtonData("Approve", fmt.Sprintf("Approve|%v", c.User.TUserID))
-		btnDecline := tgbotapi.NewInlineKeyboardButtonData("Decline", fmt.Sprintf("Decline|%v", c.User.TUserID))
-		btnRow1 := tgbotapi.NewInlineKeyboardRow(btnApprove, btnDecline)
+		btnAccept := tgbotapi.NewInlineKeyboardButtonData("Accept", fmt.Sprintf("%v|%v", NewUserAccept, c.User.TelegramID))
+		btnDecline := tgbotapi.NewInlineKeyboardButtonData("Decline", fmt.Sprintf("%v|%v", NewUserDecline, c.User.TelegramID))
+		btnRow1 := tgbotapi.NewInlineKeyboardRow(btnAccept, btnDecline)
+		markup := tgbotapi.NewInlineKeyboardMarkup(btnRow1)
 
-		text := fmt.Sprintf(`User: <a href="tg://user?id=%v">%v %v</a> made approve request`, c.User.TUserID, c.User.FirstName, c.User.LastName)
-		msg := tgbotapi.NewMessage(int64(u.TUserID), text)
+		text := fmt.Sprintf(`User: <a href="tg://user?id=%v">%v %v</a> made approve request`, c.User.TelegramID, c.User.FirstName, c.User.LastName)
+		msg := tgbotapi.NewMessage(int64(u.TelegramID), text)
 		msg.ParseMode = "HTML"
+		msg.ReplyMarkup = markup
 		bot.Send(msg)
 	}
 
@@ -2032,10 +1829,76 @@ func newUserDecline(c *UserCache, ID string) {
 
 	userID, err := strconv.Atoi(ID)
 	if err != nil {
+		msg := tgbotapi.NewMessage(c.ChatID, "Sorry, something went wrong")
+		bot.Send(msg)
 		return
 	}
 
-	declineNewUser(userID)
+	rows, err := db.Query(`
+		SELECT 
+			u.tgid,
+			u.first_name,
+			u.last_name,
+			u.status,
+			u.changed_at
+		FROM users u
+		WHERE
+			u.tgid=?
+			AND u.status!=?`, userID, models.UserRequested)
+	if err != nil {
+		msg := tgbotapi.NewMessage(c.ChatID, "Sorry, something went wrong")
+		bot.Send(msg)
+		return
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		var u dbUsers
+
+		rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName, &u.Status, &u.ChangedAt)
+
+		reply := fmt.Sprintf(`User: <a href="tg://user?id=%v">%v %v</a>
+		<i>current status:</i> %v
+		<i>changed at:</i> %v`, u.TelegramID, u.FirstName, u.LastName, u.Status, u.ChangedAt)
+
+		msg := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, reply)
+		msg.ParseMode = "HTML"
+		bot.Send(msg)
+
+		cbConfig.CallbackQueryID = c.CallbackID
+		cbConfig.Text = ""
+		bot.AnswerCallbackQuery(cbConfig)
+		return
+	}
+
+	stmt, err := db.Prepare(`
+		UPDATE 
+			users
+		SET 
+			status=?,
+			changed_by=?,
+			changed_at=?			
+		WHERE
+			tgid=?`)
+
+	if err != nil {
+		return
+	}
+
+	timeNow := time.Now().UTC()
+	_, err = stmt.Exec(models.UserBanned, c.User.TelegramID, timeNow, userID)
+
+	reply := fmt.Sprintf(`Unfortunately your request has been <b>declined</b> by <a href="tg://user?id=%v">%v %v</a> at %v. Try to text to admin`, c.User.TelegramID, c.User.FirstName, c.User.LastName, timeNow)
+	msg := tgbotapi.NewMessage(int64(userID), "Sorry, your request was denied")
+	bot.Send(msg)
+
+	reply = fmt.Sprintf(`<a href="tg://user?id=%v">User</a> has been <b>banned</b>`, userID)
+	msgEdited := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, reply)
+	msgEdited.ParseMode = "HTML"
+	_, err = bot.Send(msgEdited)
+	if err != nil {
+		log.Println(err)
+	}
 
 	cbConfig.CallbackQueryID = c.CallbackID
 	cbConfig.Text = ""
@@ -2048,10 +1911,77 @@ func newUserAccpet(c *UserCache, ID string) {
 
 	userID, err := strconv.Atoi(ID)
 	if err != nil {
+		msg := tgbotapi.NewMessage(c.ChatID, "Sorry, something went wrong")
+		bot.Send(msg)
 		return
 	}
 
-	acceptNewUser(userID)
+	rows, err := db.Query(`
+		SELECT 
+			u.tgid,
+			u.first_name,
+			u.last_name,
+			u.status,
+			u.changed_at
+		FROM users u
+		WHERE
+			u.tgid=?
+			AND u.status!=?`, userID, models.UserRequested)
+	if err != nil {
+		msg := tgbotapi.NewMessage(c.ChatID, "Sorry, something went wrong")
+		bot.Send(msg)
+		return
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		var u dbUsers
+
+		rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName, &u.Status, &u.ChangedAt)
+
+		reply := fmt.Sprintf(`User: <a href="tg://user?id=%v">%v %v</a>
+		<i>current status:</i> %v
+		<i>changed at:</i> %v`, u.TelegramID, u.FirstName, u.LastName, u.Status, u.ChangedAt)
+
+		msg := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, reply)
+		msg.ParseMode = "HTML"
+		bot.Send(msg)
+
+		cbConfig.CallbackQueryID = c.CallbackID
+		cbConfig.Text = ""
+		bot.AnswerCallbackQuery(cbConfig)
+		return
+	}
+
+	stmt, err := db.Prepare(`
+		UPDATE 
+			users
+		SET 
+			status=?,
+			changed_by=?,
+			changed_at=?			
+		WHERE
+			tgid=?`)
+
+	if err != nil {
+		return
+	}
+
+	timeNow := time.Now().UTC()
+	_, err = stmt.Exec(models.UserApprowed, c.User.TelegramID, timeNow, userID)
+
+	reply := fmt.Sprintf(`Your account has been <b>approved</b> by <a href="tg://user?id=%v">%v %v</a> at %v`, c.User.TelegramID, c.User.FirstName, c.User.LastName, timeNow)
+	msg := tgbotapi.NewMessage(int64(userID), reply)
+	msg.ParseMode = "HTML"
+	bot.Send(msg)
+
+	reply = fmt.Sprintf(`<a href="tg://user?id=%v">User</a> has been <b>approved</b>`, userID)
+	msgEdited := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, reply)
+	msgEdited.ParseMode = "HTML"
+	_, err = bot.Send(msgEdited)
+	if err != nil {
+		log.Println(err)
+	}
 
 	cbConfig.CallbackQueryID = c.CallbackID
 	cbConfig.Text = ""
@@ -2063,7 +1993,7 @@ func changeStatus(c *UserCache, newStatus string) {
 	var t dbTasks
 	var cbConfig tgbotapi.CallbackConfig
 
-	tguID := c.User.TUserID
+	tguID := c.User.TelegramID
 
 	rows, err := db.Query(`
 		SELECT			
@@ -2127,7 +2057,7 @@ func changeStatus(c *UserCache, newStatus string) {
 		return
 	}
 
-	_, err = stmt.Exec(newStatus, time.Now().UTC(), c.User.TUserID, t.ID)
+	_, err = stmt.Exec(newStatus, time.Now().UTC(), c.User.TelegramID, t.ID)
 	if err != nil {
 		cbConfig.Text = "Something went wrong while updating task status"
 		cbConfig.ShowAlert = true
@@ -2177,7 +2107,7 @@ func showTask(c *UserCache) {
 		FROM tasks t
 		WHERE
 			t.id=?
-			AND (t.to_user=? OR t.from_user=?)`, c.TaskID, c.User.TUserID, c.User.TUserID)
+			AND (t.to_user=? OR t.from_user=?)`, c.TaskID, c.User.TelegramID, c.User.TelegramID)
 	if err != nil {
 		msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting task info")
 		bot.Send(msg)
@@ -2198,7 +2128,7 @@ func showTask(c *UserCache) {
 		return
 	}
 
-	if t.ToUser != c.User.TUserID && t.FromUser != c.User.TUserID {
+	if t.ToUser != c.User.TelegramID && t.FromUser != c.User.TelegramID {
 		msg := tgbotapi.NewMessage(c.ChatID, "Access denided")
 		bot.Send(msg)
 		return
@@ -2211,9 +2141,9 @@ func showTask(c *UserCache) {
 	<i>description:</i> %v`, t.ID, t.Status, t.ChangedAt.Time, t.Title, t.Description)
 
 	var taskType string
-	if t.ToUser == c.User.TUserID {
+	if t.ToUser == c.User.TelegramID {
 		taskType = "Inbox"
-	} else if t.FromUser == c.User.TUserID {
+	} else if t.FromUser == c.User.TelegramID {
 		taskType = "Sent"
 	}
 
@@ -2279,7 +2209,7 @@ func showHistory(c *UserCache) {
 		WHERE
 			h.taskid=?			
 		ORDER BY 
-			h.date`, c.TaskID, c.User.TUserID, c.User.TUserID)
+			h.date`, c.TaskID, c.User.TelegramID, c.User.TelegramID)
 	if err != nil {
 		cbConfig.Text = "Something went wrong while selecting task history"
 		cbConfig.ShowAlert = true
@@ -2289,7 +2219,7 @@ func showHistory(c *UserCache) {
 	}
 
 	for rows.Next() {
-		rows.Scan(&row.h.Status, &row.h.Date, &row.h.Comments, &row.h.TaskID, &row.u.TUserID, &row.u.FirstName, &row.u.LastName, &row.t.Title)
+		rows.Scan(&row.h.Status, &row.h.Date, &row.h.Comments, &row.h.TaskID, &row.u.TelegramID, &row.u.FirstName, &row.u.LastName, &row.t.Title)
 		xs = append(xs, row)
 	}
 	rows.Close()
@@ -2308,7 +2238,7 @@ func showHistory(c *UserCache) {
 	`, xs[0].h.TaskID, xs[0].t.Title)
 
 	for key, val := range xs {
-		reply += fmt.Sprintf(`%v. <b>%v</b> by <a href="tg://user?id=%v">%v %v</a> at %v`, key+1, val.h.Status, val.u.TUserID, val.u.FirstName, val.u.LastName, val.h.Date.Time)
+		reply += fmt.Sprintf(`%v. <b>%v</b> by <a href="tg://user?id=%v">%v %v</a> at %v`, key+1, val.h.Status, val.u.TelegramID, val.u.FirstName, val.u.LastName, val.h.Date.Time)
 		if val.h.Comments != "" {
 			reply += fmt.Sprintf(`<v>Comment:</i> %v`, val.h.Comments)
 		}
@@ -2337,7 +2267,7 @@ func addComment(c *UserCache) {
 	var t dbTasks
 	var cbConfig tgbotapi.CallbackConfig
 
-	tguID := c.User.TUserID
+	tguID := c.User.TelegramID
 
 	rows, err := db.Query(`
 		SELECT			
