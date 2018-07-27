@@ -123,7 +123,7 @@ func main() {
 				c.ChatID = update.CallbackQuery.Message.Chat.ID
 				c.CallbackID = update.CallbackQuery.ID
 				c.CallbackData = update.CallbackQuery.Data
-
+				
 				go handleCallbackQuery(c)
 				continue
 			}
@@ -1843,8 +1843,7 @@ func newUserDecline(c *UserCache, ID string) {
 			u.changed_at
 		FROM users u
 		WHERE
-			u.tgid=?
-			AND u.status!=?`, userID, models.UserRequested)
+			u.tgid=?`, userID)
 	if err != nil {
 		msg := tgbotapi.NewMessage(c.ChatID, "Sorry, something went wrong")
 		bot.Send(msg)
@@ -1852,11 +1851,12 @@ func newUserDecline(c *UserCache, ID string) {
 	}
 	defer rows.Close()
 
+	var u dbUsers
 	if rows.Next() {
-		var u dbUsers
-
 		rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName, &u.Status, &u.ChangedAt)
+	}
 
+	if u.Status != models.UserRequested {
 		reply := fmt.Sprintf(`User: <a href="tg://user?id=%v">%v %v</a>
 		<i>current status:</i> %v
 		<i>changed at:</i> %v`, u.TelegramID, u.FirstName, u.LastName, u.Status, u.ChangedAt)
@@ -1892,7 +1892,7 @@ func newUserDecline(c *UserCache, ID string) {
 	msg := tgbotapi.NewMessage(int64(userID), "Sorry, your request was denied")
 	bot.Send(msg)
 
-	reply = fmt.Sprintf(`<a href="tg://user?id=%v">User</a> has been <b>banned</b>`, userID)
+	reply = fmt.Sprintf(`<a href="tg://user?id=%v">%v %v</a> has been <b>banned</b>`, u.TelegramID, u.FirstName, u.LastName)
 	msgEdited := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, reply)
 	msgEdited.ParseMode = "HTML"
 	_, err = bot.Send(msgEdited)
@@ -1925,8 +1925,7 @@ func newUserAccpet(c *UserCache, ID string) {
 			u.changed_at
 		FROM users u
 		WHERE
-			u.tgid=?
-			AND u.status!=?`, userID, models.UserRequested)
+			u.tgid=?`, userID)
 	if err != nil {
 		msg := tgbotapi.NewMessage(c.ChatID, "Sorry, something went wrong")
 		bot.Send(msg)
@@ -1934,11 +1933,12 @@ func newUserAccpet(c *UserCache, ID string) {
 	}
 	defer rows.Close()
 
+	var u dbUsers
 	if rows.Next() {
-		var u dbUsers
-
 		rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName, &u.Status, &u.ChangedAt)
+	}
 
+	if u.Status != models.UserRequested {
 		reply := fmt.Sprintf(`User: <a href="tg://user?id=%v">%v %v</a>
 		<i>current status:</i> %v
 		<i>changed at:</i> %v`, u.TelegramID, u.FirstName, u.LastName, u.Status, u.ChangedAt)
@@ -1975,7 +1975,7 @@ func newUserAccpet(c *UserCache, ID string) {
 	msg.ParseMode = "HTML"
 	bot.Send(msg)
 
-	reply = fmt.Sprintf(`<a href="tg://user?id=%v">User</a> has been <b>approved</b>`, userID)
+	reply = fmt.Sprintf(`<a href="tg://user?id=%v">%v %v</a> has been <b>approved</b>`, u.TelegramID, u.FirstName, u.LastName)
 	msgEdited := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, reply)
 	msgEdited.ParseMode = "HTML"
 	_, err = bot.Send(msgEdited)
