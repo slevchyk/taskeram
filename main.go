@@ -20,17 +20,6 @@ var bot *tgbotapi.BotAPI
 var cache map[int]*UserCache
 var taskRules map[string]map[string]AllowedActions
 
-const (
-	NewUserRequest = "NewUserRequest"
-	NewUserCancel  = "NewUserCancel"
-	NewUserAccept  = "NewUserAccept"
-	NewUserDecline = "NewUserDecline"
-)
-
-const (
-	ACTION_USERREQUEST = "userRequest"
-)
-
 func init() {
 	var err error
 
@@ -40,6 +29,10 @@ func init() {
 	}
 
 	token := os.Getenv("TELEGRAM_TASKERAM_TOKEN")
+
+	if token == "" {
+		log.Fatal("Env variable TELEGRAM_TASKERAM_TOKEN does not exist")
+	}
 
 	bot, err = tgbotapi.NewBotAPI(token)
 	if err != nil {
@@ -77,7 +70,6 @@ func main() {
 
 	// инициализируем канал, куда будут прилетать обновления от API
 	var ucfg tgbotapi.UpdateConfig
-	var c *UserCache
 
 	ucfg = tgbotapi.NewUpdate(0)
 	ucfg.Timeout = 60
@@ -107,7 +99,7 @@ func main() {
 				cache[tgid] = &UserCache{User: u}
 			}
 
-			c = cache[tgid]
+			c := cache[tgid]
 
 			if update.CallbackQuery != nil {
 
@@ -123,7 +115,7 @@ func main() {
 				c.ChatID = update.CallbackQuery.Message.Chat.ID
 				c.CallbackID = update.CallbackQuery.ID
 				c.CallbackData = update.CallbackQuery.Data
-				
+
 				go handleCallbackQuery(c)
 				continue
 			}
@@ -238,6 +230,40 @@ func initDB() {
 		log.Fatal(err)
 	}
 
+	envID := os.Getenv("TELEGRAM_TASKERAM_ADMIN")
+	if envID == "" {
+		log.Fatal("Env variable TELEGRAM_TASKERAM_ADMIN does not exist")
+	}
+
+	tgID, err := strconv.Atoi(envID)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	rows, err := db.Query(`
+		SELECT
+		u.id
+		FROM users u
+		WHERE
+			u.tgid=?`, tgID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		stmt, err := db.Prepare(`
+			INSERT into 'users'(tgid, admin, status, changed_at) VALUES (?,?,?,?)`)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = stmt.Exec(tgID, 1, models.UserApprowed, time.Now().UTC())
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 }
 
 //запропонуємо користувачу зробити запит на активацію в програмі
@@ -247,8 +273,8 @@ func serveNewUser(update tgbotapi.Update) {
 
 	reply := fmt.Sprintf("Hello, %s %s. I can see you are new one here. Would you like to send request to approve your account in Taskeram?\n", ut.FirstName, ut.LastName)
 
-	btnYes := tgbotapi.NewInlineKeyboardButtonData("✓ Yes", NewUserRequest)
-	btnNo := tgbotapi.NewInlineKeyboardButtonData("🚫 No", NewUserCancel)
+	btnYes := tgbotapi.NewInlineKeyboardButtonData("✓ Yes", models.NewUserRequest)
+	btnNo := tgbotapi.NewInlineKeyboardButtonData("🚫 No", models.NewUserCancel)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(btnYes, btnNo))
 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, reply)
@@ -355,6 +381,8 @@ func serveUser(c *UserCache) {
 func handleCommand(c *UserCache) {
 
 	switch c.Command {
+	case "start":
+		handleCommandStart(c)
 	case "task":
 		handleCommandTask(c)
 		return
@@ -363,6 +391,57 @@ func handleCommand(c *UserCache) {
 		return
 	}
 
+}
+
+func handleCommandStart(c *UserCache) {
+
+	//команда старт в нас обробляється тільки для адміністратора
+	envID := os.Getenv("TELEGRAM_TASKERAM_ADMIN")
+	if envID == "" {
+		log.Fatal("Env variable TELEGRAM_TASKERAM_ADMIN does not exist")
+	}
+
+	tgID, err := strconv.Atoi(envID)
+	if err != nil {
+		return
+	}
+
+	if c.User.TelegramID != tgID {
+		return
+	}
+
+	rows, err := db.Query(`
+		SELECT
+		u.id
+		FROM users u
+		WHERE
+			u.tgid=?`, tgID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		stmt, err := db.Prepare(`
+			UPDATE 
+				users
+			SET
+				first_name=?,
+				last_name=?,
+				changed_at=?,
+				changed_by=?
+			WHERE
+				tgid=?
+				AND changed_by=0`)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = stmt.Exec(c.Message.From.FirstName, c.Message.From.LastName, time.Now().UTC(), tgID, tgID)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 }
 
 func handleCommandTask(c *UserCache) {
@@ -1655,15 +1734,15 @@ func handleCallbackQuery(c *UserCache) {
 	do := xs[0]
 
 	switch do {
-	case NewUserCancel:
+	case models.NewUserCancel:
 		newUserCancel(c)
-	case NewUserRequest:
+	case models.NewUserRequest:
 		newUserAdd(c)
-	case NewUserDecline:
+	case models.NewUserDecline:
 		if len(xs) == 2 {
 			newUserDecline(c, xs[1])
 		}
-	case NewUserAccept:
+	case models.NewUserAccept:
 		if len(xs) == 2 {
 			newUserAccpet(c, xs[1])
 		}
@@ -1783,8 +1862,6 @@ func newUserAdd(c *UserCache) {
 		return
 	}
 
-	//notifyNewUserRequest(int(userID))
-
 	cbConfig.Text = ""
 	bot.AnswerCallbackQuery(cbConfig)
 
@@ -1807,8 +1884,8 @@ func newUserAdd(c *UserCache) {
 	for rows.Next() {
 		rows.Scan(&u.TelegramID)
 
-		btnAccept := tgbotapi.NewInlineKeyboardButtonData("Accept", fmt.Sprintf("%v|%v", NewUserAccept, c.User.TelegramID))
-		btnDecline := tgbotapi.NewInlineKeyboardButtonData("Decline", fmt.Sprintf("%v|%v", NewUserDecline, c.User.TelegramID))
+		btnAccept := tgbotapi.NewInlineKeyboardButtonData("Accept", fmt.Sprintf("%v|%v", models.NewUserAccept, c.User.TelegramID))
+		btnDecline := tgbotapi.NewInlineKeyboardButtonData("Decline", fmt.Sprintf("%v|%v", models.NewUserDecline, c.User.TelegramID))
 		btnRow1 := tgbotapi.NewInlineKeyboardRow(btnAccept, btnDecline)
 		markup := tgbotapi.NewInlineKeyboardMarkup(btnRow1)
 

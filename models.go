@@ -113,8 +113,3 @@ type History struct {
 	t dbTasks
 	u dbUsers
 }
-
-type TaskInfo struct {
-	Task     dbTasks
-	FromUser dbUsers
-}

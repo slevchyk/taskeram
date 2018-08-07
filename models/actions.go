@@ -63,3 +63,10 @@ const (
 	UserApprowed  = "Approwed"
 	UserBanned    = "Banned"
 )
+
+const (
+	NewUserRequest = "NewUserRequest"
+	NewUserCancel  = "NewUserCancel"
+	NewUserAccept  = "NewUserAccept"
+	NewUserDecline = "NewUserDecline"
+)
