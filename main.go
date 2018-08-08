@@ -19,6 +19,7 @@ var db *sql.DB
 var bot *tgbotapi.BotAPI
 var cache map[int]*UserCache
 var taskRules map[string]map[string]AllowedActions
+var actionStatus map[string]string
 
 func init() {
 	var err error
@@ -52,18 +53,24 @@ func main() {
 	inboxRules := make(map[string]AllowedActions)
 	sentRules := make(map[string]AllowedActions)
 
-	inboxRules["New"] = AllowedActions{"Start", "Comment", "Complete", "History"}
-	inboxRules["Start"] = AllowedActions{"Complete", "Comment", "History"}
-	inboxRules["Reject"] = AllowedActions{"Complete", "Comment", "History"}
-	inboxRules["Complete"] = AllowedActions{"History"}
-	inboxRules["Close"] = AllowedActions{"History"}
+	inboxRules[models.TaskStatusNew] = AllowedActions{models.Start, models.Comment, models.Comment, models.History}
+	inboxRules[models.TaskStatusStarted] = AllowedActions{models.Comment, models.Comment, models.History}
+	inboxRules[models.TaskStatusRejected] = AllowedActions{models.Comment, models.Comment, models.History}
+	inboxRules[models.TaskStatusCompleted] = AllowedActions{models.History}
+	inboxRules[models.TaskStatusClosed] = AllowedActions{models.History}
 	taskRules["Inbox"] = inboxRules
 
-	sentRules["New"] = AllowedActions{"Close", "Comment", "History"}
-	sentRules["Start"] = AllowedActions{"Close", "Comment", "History"}
-	sentRules["Complete"] = AllowedActions{"Reject", "Comment", "Close", "History"}
-	sentRules["Close"] = AllowedActions{"History"}
+	sentRules[models.TaskStatusNew] = AllowedActions{models.Close, models.Comment, models.History}
+	sentRules[models.TaskStatusStarted] = AllowedActions{models.Close, models.Comment, models.History}
+	sentRules[models.TaskStatusCompleted] = AllowedActions{models.Reject, models.Comment, models.Close, models.History}
+	sentRules[models.TaskStatusClosed] = AllowedActions{models.History}
 	taskRules["Sent"] = sentRules
+
+	actionStatus = make(map[string]string)
+	actionStatus[models.Start] = models.TaskStatusStarted
+	actionStatus[models.Complete] = models.TaskStatusCompleted
+	actionStatus[models.Reject] = models.TaskStatusRejected
+	actionStatus[models.Close] = models.TaskStatusClosed
 
 	bot.Debug = false
 	log.Printf("Authorized on account %s", bot.Self.UserName)
@@ -194,7 +201,7 @@ func initDB() {
 		CREATE TABLE IF NOT EXISTS 'task_history'(
 			'id' INTEGER PRIMARY KEY AUTOINCREMENT,
 			'taskid' INTEGER REFERENCES tasks,
-			'userid' INTEGER REFERENCES users,
+			'tgid' INTEGER REFERENCES users,
 			'date' DATE,
 			'status' INTEGER,			
 			'comments' TEXT
@@ -206,7 +213,7 @@ func initDB() {
 	_, err = db.Exec(`
 		CREATE TRIGGER IF NOT EXISTS update_task_history AFTER UPDATE ON tasks WHEN (old.status <> new.status OR old.comments <> new.comments)
 		BEGIN
-			INSERT INTO task_history(date, status, taskid, comments, userid) values (new.changed_at, new.status, new.id, new.comments, new.changed_by);
+			INSERT INTO task_history(date, status, taskid, comments, tgid) values (new.changed_at, new.status, new.id, new.comments, new.changed_by);
 		END;`)
 	if err != nil {
 		log.Fatal(err)
@@ -215,7 +222,7 @@ func initDB() {
 	_, err = db.Exec(`
 		CREATE TRIGGER IF NOT EXISTS insert_task_history AFTER INSERT ON tasks
 		BEGIN
-			INSERT INTO task_history(date, status, taskid, comments, userid) values (new.changed_at, new.status, new.id, new.comments, new.changed_by);
+			INSERT INTO task_history(date, status, taskid, comments, tgid) values (new.changed_at, new.status, new.id, new.comments, new.changed_by);
 		END;`)
 	if err != nil {
 		log.Fatal(err)
@@ -1608,7 +1615,7 @@ func handleNew(c *UserCache) {
 				return
 			}
 
-			res, err := stmt.Exec(c.User.TelegramID, toUser.TelegramID, models.TaskStatusNew, createdAt, c.User.ID, c.NewTask.Title, c.NewTask.Description)
+			res, err := stmt.Exec(c.User.TelegramID, toUser.TelegramID, models.TaskStatusNew, createdAt, c.User.TelegramID, c.NewTask.Title, c.NewTask.Description)
 			if err != nil {
 				msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while saving task")
 				bot.Send(msg)
@@ -1752,7 +1759,7 @@ func handleCallbackQuery(c *UserCache) {
 			if err != nil {
 				return
 			}
-			changeStatus(c, do)
+			changeStatus(c, actionStatus[do])
 		}
 	case models.Complete:
 		if len(xs) == 2 {
@@ -1760,7 +1767,7 @@ func handleCallbackQuery(c *UserCache) {
 			if err != nil {
 				return
 			}
-			changeStatus(c, do)
+			changeStatus(c, actionStatus[do])
 		}
 	case models.Reject:
 		if len(xs) == 2 {
@@ -1768,7 +1775,7 @@ func handleCallbackQuery(c *UserCache) {
 			if err != nil {
 				return
 			}
-			changeStatus(c, do)
+			changeStatus(c, actionStatus[do])
 		}
 	case models.Close:
 		if len(xs) == 2 {
@@ -1776,7 +1783,7 @@ func handleCallbackQuery(c *UserCache) {
 			if err != nil {
 				return
 			}
-			changeStatus(c, do)
+			changeStatus(c, actionStatus[do])
 		}
 	case models.History:
 		if len(xs) == 2 {
@@ -2279,7 +2286,7 @@ func showHistory(c *UserCache) {
 			task_history h
 		LEFT JOIN
 			users u
-			ON h.userid = u.id
+			ON h.tgid = u.tgid
 		LEFT JOIN
 			tasks t 
 			ON h.taskid = t.id
