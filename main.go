@@ -369,6 +369,14 @@ func serveUser(c *UserCache) {
 			handleMain(c)
 		} else if cm == models.MenuInbox && msg == models.New {
 			handleInboxNew(c)
+		} else if cm == models.MenuInbox && msg == models.TaskStatusStarted {
+			handleInboxStarted(c)
+		} else if cm == models.MenuInbox && msg == models.TaskStatusRejected {
+			handleInboxRejected(c)
+		} else if cm == models.MenuInbox && msg == models.TaskStatusCompleted {
+			handleInboxCompleted(c)
+		} else if cm == models.MenuInbox && msg == models.TaskStatusClosed {
+			handleInboxClosed(c)
 		} else if cm == models.MenuMain && msg == models.Sent {
 			handleSent(c)
 		} else if cm == models.MenuSent && msg == models.Back {
@@ -1237,8 +1245,9 @@ func handleInbox(c *UserCache) {
 	c.NewTask = nil
 
 	row1 := tgbotapi.NewKeyboardButtonRow(buttons.Back)
-	row2 := tgbotapi.NewKeyboardButtonRow(buttons.New, buttons.Uncompleted, buttons.Completed)
-	markup := tgbotapi.NewReplyKeyboard(row1, row2)
+	row2 := tgbotapi.NewKeyboardButtonRow(buttons.New, buttons.Started, buttons.Rejected)
+	row3 := tgbotapi.NewKeyboardButtonRow(buttons.Completed, buttons.Closed)
+	markup := tgbotapi.NewReplyKeyboard(row1, row2, row3)
 
 	msg := tgbotapi.NewMessage(c.ChatID, "Inbox:")
 	msg.ReplyMarkup = markup
@@ -1253,7 +1262,7 @@ func handleSent(c *UserCache) {
 	c.NewTask = nil
 
 	row1 := tgbotapi.NewKeyboardButtonRow(buttons.Back)
-	row2 := tgbotapi.NewKeyboardButtonRow(buttons.New, buttons.Uncompleted, buttons.Completed)
+	row2 := tgbotapi.NewKeyboardButtonRow(buttons.New, buttons.Started, buttons.Completed)
 	markup := tgbotapi.NewReplyKeyboard(row1, row2)
 
 	msg := tgbotapi.NewMessage(c.ChatID, "Inbox:")
@@ -1288,7 +1297,7 @@ func handleInboxNew(c *UserCache) {
 			t.to_user=?
 			AND t.status=?
 		ORDER BY
-			t.id`, c.User.TelegramID, models.New)
+			t.id`, c.User.TelegramID, models.TaskStatusNew)
 		if err != nil {
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting new tasks")
 			msg.ParseMode = "HTML"
@@ -1354,12 +1363,372 @@ func handleInboxNew(c *UserCache) {
 	}
 }
 
-func handleInboxCompleted(c *UserCache) {
+func handleInboxStarted(c *UserCache) {
 
+	c.currentMenu = models.MenuInboxNew
+
+	editingTask := c.editingTaskIndx
+	tasks := c.tasks
+
+	var t dbTasks
+	var msgText string
+
+	doAction := true
+
+	if editingTask == 0 {
+		doAction = false
+
+		rows, err := db.Query(`
+		SELECT
+			t.ID,
+			t.title,
+			t.description,
+			t.changed_at			
+		FROM tasks t
+		WHERE
+			t.to_user=?
+			AND t.status=?
+		ORDER BY
+			t.id`, c.User.TelegramID, models.TaskStatusStarted)
+		if err != nil {
+			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting started tasks")
+			msg.ParseMode = "HTML"
+			bot.Send(msg)
+
+			c.Text = ""
+			handleInbox(c)
+			return
+		}
+		defer rows.Close()
+
+		tasks = make(map[int]dbTasks)
+
+		i := 1
+		for rows.Next() {
+			rows.Scan(&t.ID, &t.Title, &t.Description, &t.ChangedAt)
+
+			tasks[i] = t
+			i++
+		}
+
+		if len(tasks) == 0 {
+			msg := tgbotapi.NewMessage(c.ChatID, "I have no started tasks")
+			bot.Send(msg)
+			handleInbox(c)
+			return
+		}
+
+		editingTask = 1
+		c.tasks = tasks
+		c.editingTaskIndx = editingTask
+	}
+
+	if doAction {
+		msgText = c.Text
+	} else {
+		msgText = ""
+		c.TaskID = tasks[editingTask].ID
+		showTask(c)
+		return
+	}
+
+	switch msgText {
+	case models.Next:
+
+		editingTask++
+
+		if editingTask > len(tasks) {
+			c.editingTaskIndx = 0
+			c.currentMenu = models.MenuInbox
+
+			msg := tgbotapi.NewMessage(c.ChatID, "No more started tasks. It was last one")
+			bot.Send(msg)
+
+			handleInbox(c)
+			return
+		}
+
+		c.editingTaskIndx = editingTask
+		c.TaskID = tasks[editingTask].ID
+
+		showTask(c)
+	}
 }
 
-func handleTasksViewFromMe(c *UserCache) {
+func handleInboxRejected(c *UserCache) {
 
+	c.currentMenu = models.MenuInboxNew
+
+	editingTask := c.editingTaskIndx
+	tasks := c.tasks
+
+	var t dbTasks
+	var msgText string
+
+	doAction := true
+
+	if editingTask == 0 {
+		doAction = false
+
+		rows, err := db.Query(`
+		SELECT
+			t.ID,
+			t.title,
+			t.description,
+			t.changed_at			
+		FROM tasks t
+		WHERE
+			t.to_user=?
+			AND t.status=?
+		ORDER BY
+			t.id`, c.User.TelegramID, models.TaskStatusRejected)
+		if err != nil {
+			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting rejected tasks")
+			msg.ParseMode = "HTML"
+			bot.Send(msg)
+
+			c.Text = ""
+			handleInbox(c)
+			return
+		}
+		defer rows.Close()
+
+		tasks = make(map[int]dbTasks)
+
+		i := 1
+		for rows.Next() {
+			rows.Scan(&t.ID, &t.Title, &t.Description, &t.ChangedAt)
+
+			tasks[i] = t
+			i++
+		}
+
+		if len(tasks) == 0 {
+			msg := tgbotapi.NewMessage(c.ChatID, "I have no rejected tasks")
+			bot.Send(msg)
+			handleInbox(c)
+			return
+		}
+
+		editingTask = 1
+		c.tasks = tasks
+		c.editingTaskIndx = editingTask
+	}
+
+	if doAction {
+		msgText = c.Text
+	} else {
+		msgText = ""
+		c.TaskID = tasks[editingTask].ID
+		showTask(c)
+		return
+	}
+
+	switch msgText {
+	case models.Next:
+
+		editingTask++
+
+		if editingTask > len(tasks) {
+			c.editingTaskIndx = 0
+			c.currentMenu = models.MenuInbox
+
+			msg := tgbotapi.NewMessage(c.ChatID, "No more rejected tasks. It was last one")
+			bot.Send(msg)
+
+			handleInbox(c)
+			return
+		}
+
+		c.editingTaskIndx = editingTask
+		c.TaskID = tasks[editingTask].ID
+
+		showTask(c)
+	}
+}
+
+func handleInboxCompleted(c *UserCache) {
+
+	c.currentMenu = models.MenuInboxNew
+
+	editingTask := c.editingTaskIndx
+	tasks := c.tasks
+
+	var t dbTasks
+	var msgText string
+
+	doAction := true
+
+	if editingTask == 0 {
+		doAction = false
+
+		rows, err := db.Query(`
+		SELECT
+			t.ID,
+			t.title,
+			t.description,
+			t.changed_at			
+		FROM tasks t
+		WHERE
+			t.to_user=?
+			AND t.status=?
+		ORDER BY
+			t.id`, c.User.TelegramID, models.TaskStatusCompleted)
+		if err != nil {
+			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting completed tasks")
+			msg.ParseMode = "HTML"
+			bot.Send(msg)
+
+			c.Text = ""
+			handleInbox(c)
+			return
+		}
+		defer rows.Close()
+
+		tasks = make(map[int]dbTasks)
+
+		i := 1
+		for rows.Next() {
+			rows.Scan(&t.ID, &t.Title, &t.Description, &t.ChangedAt)
+
+			tasks[i] = t
+			i++
+		}
+
+		if len(tasks) == 0 {
+			msg := tgbotapi.NewMessage(c.ChatID, "I have no completed tasks")
+			bot.Send(msg)
+			handleInbox(c)
+			return
+		}
+
+		editingTask = 1
+		c.tasks = tasks
+		c.editingTaskIndx = editingTask
+	}
+
+	if doAction {
+		msgText = c.Text
+	} else {
+		msgText = ""
+		c.TaskID = tasks[editingTask].ID
+		showTask(c)
+		return
+	}
+
+	switch msgText {
+	case models.Next:
+
+		editingTask++
+
+		if editingTask > len(tasks) {
+			c.editingTaskIndx = 0
+			c.currentMenu = models.MenuInbox
+
+			msg := tgbotapi.NewMessage(c.ChatID, "No more completed tasks. It was last one")
+			bot.Send(msg)
+
+			handleInbox(c)
+			return
+		}
+
+		c.editingTaskIndx = editingTask
+		c.TaskID = tasks[editingTask].ID
+
+		showTask(c)
+	}
+}
+
+func handleInboxClosed(c *UserCache) {
+
+	c.currentMenu = models.MenuInboxNew
+
+	editingTask := c.editingTaskIndx
+	tasks := c.tasks
+
+	var t dbTasks
+	var msgText string
+
+	doAction := true
+
+	if editingTask == 0 {
+		doAction = false
+
+		rows, err := db.Query(`
+		SELECT
+			t.ID,
+			t.title,
+			t.description,
+			t.changed_at			
+		FROM tasks t
+		WHERE
+			t.to_user=?
+			AND t.status=?
+		ORDER BY
+			t.id`, c.User.TelegramID, models.TaskStatusClosed)
+		if err != nil {
+			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting closed tasks")
+			msg.ParseMode = "HTML"
+			bot.Send(msg)
+
+			c.Text = ""
+			handleInbox(c)
+			return
+		}
+		defer rows.Close()
+
+		tasks = make(map[int]dbTasks)
+
+		i := 1
+		for rows.Next() {
+			rows.Scan(&t.ID, &t.Title, &t.Description, &t.ChangedAt)
+
+			tasks[i] = t
+			i++
+		}
+
+		if len(tasks) == 0 {
+			msg := tgbotapi.NewMessage(c.ChatID, "I have no closed tasks")
+			bot.Send(msg)
+			handleInbox(c)
+			return
+		}
+
+		editingTask = 1
+		c.tasks = tasks
+		c.editingTaskIndx = editingTask
+	}
+
+	if doAction {
+		msgText = c.Text
+	} else {
+		msgText = ""
+		c.TaskID = tasks[editingTask].ID
+		showTask(c)
+		return
+	}
+
+	switch msgText {
+	case models.Next:
+
+		editingTask++
+
+		if editingTask > len(tasks) {
+			c.editingTaskIndx = 0
+			c.currentMenu = models.MenuInbox
+
+			msg := tgbotapi.NewMessage(c.ChatID, "No more closed tasks. It was last one")
+			bot.Send(msg)
+
+			handleInbox(c)
+			return
+		}
+
+		c.editingTaskIndx = editingTask
+		c.TaskID = tasks[editingTask].ID
+
+		showTask(c)
+	}
 }
 
 func handleNew(c *UserCache) {
