@@ -405,7 +405,6 @@ func handleCommand(c *UserCache) {
 		handleHistoryTask(c)
 		return
 	}
-
 }
 
 func handleCommandStart(c *UserCache) {
@@ -2384,12 +2383,12 @@ func newUserAccpet(c *UserCache, ID string) {
 		bot.Send(msg)
 		return
 	}
-	defer rows.Close()
 
 	var u dbUsers
 	if rows.Next() {
 		rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName, &u.Status, &u.ChangedAt)
 	}
+	rows.Close()
 
 	if u.Status != models.UserRequested {
 		reply := fmt.Sprintf(`User: <a href="tg://user?id=%v">%v %v</a>
@@ -2421,7 +2420,14 @@ func newUserAccpet(c *UserCache, ID string) {
 	}
 
 	timeNow := time.Now().UTC()
-	_, err = stmt.Exec(models.UserApprowed, c.User.TelegramID, timeNow, userID)
+	_, err = stmt.Exec(models.UserApprowed, c.User.TelegramID, timeNow,  u.TelegramID)
+	if err != nil {
+		reply := fmt.Sprintf(`Can't approve '<a href="tg://user?id=%v">%v %v</a>. Err:%v`, u.TelegramID, u.FirstName, u.LastName, err.Error())
+		msg := tgbotapi.NewMessage(c.ChatID, reply)
+		msg.ParseMode = "HTML"
+		bot.Send(msg)
+		return
+	}
 
 	reply := fmt.Sprintf(`Your account has been <b>approved</b> by <a href="tg://user?id=%v">%v %v</a> at %v`, c.User.TelegramID, c.User.FirstName, c.User.LastName, timeNow)
 	msg := tgbotapi.NewMessage(int64(userID), reply)
