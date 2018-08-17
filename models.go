@@ -113,3 +113,31 @@ type History struct {
 	t dbTasks
 	u dbUsers
 }
+
+type Buttons struct {
+	Next      tgbotapi.KeyboardButton
+	Users     tgbotapi.KeyboardButton
+	Back      tgbotapi.KeyboardButton
+	View      tgbotapi.KeyboardButton
+	All       tgbotapi.KeyboardButton
+	Requests  tgbotapi.KeyboardButton
+	Banned    tgbotapi.KeyboardButton
+	Edit      tgbotapi.KeyboardButton
+	Approve   tgbotapi.KeyboardButton
+	Ban       tgbotapi.KeyboardButton
+	Unban     tgbotapi.KeyboardButton
+	Inbox     tgbotapi.KeyboardButton
+	Sent      tgbotapi.KeyboardButton
+	New       tgbotapi.KeyboardButton
+	Started   tgbotapi.KeyboardButton
+	Rejected  tgbotapi.KeyboardButton
+	Completed tgbotapi.KeyboardButton
+	Closed    tgbotapi.KeyboardButton
+	Save      tgbotapi.KeyboardButton
+	Cancel    tgbotapi.KeyboardButton
+	Start     tgbotapi.KeyboardButton
+	Complete  tgbotapi.KeyboardButton
+	History   tgbotapi.KeyboardButton
+	Close     tgbotapi.KeyboardButton
+	Reject    tgbotapi.KeyboardButton
+}

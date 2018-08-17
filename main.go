@@ -10,7 +10,6 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/slevchyk/taskeram/buttons"
 	"github.com/slevchyk/taskeram/models"
 	"gopkg.in/telegram-bot-api.v4"
 )
@@ -20,6 +19,7 @@ var bot *tgbotapi.BotAPI
 var cache map[int]*UserCache
 var taskRules map[string]map[string]AllowedActions
 var actionStatus map[string]string
+var buttons Buttons
 
 func init() {
 	var err error
@@ -71,6 +71,32 @@ func main() {
 	actionStatus[models.Complete] = models.TaskStatusCompleted
 	actionStatus[models.Reject] = models.TaskStatusRejected
 	actionStatus[models.Close] = models.TaskStatusClosed
+
+	buttons.Next = tgbotapi.NewKeyboardButton(models.Next)
+	buttons.Users = tgbotapi.NewKeyboardButton(models.Users)
+	buttons.Back = tgbotapi.NewKeyboardButton(models.Back)
+	buttons.View = tgbotapi.NewKeyboardButton(models.View)
+	buttons.All = tgbotapi.NewKeyboardButton(models.All)
+	buttons.Requests = tgbotapi.NewKeyboardButton(models.Requests)
+	buttons.Banned = tgbotapi.NewKeyboardButton(models.Banned)
+	buttons.Edit = tgbotapi.NewKeyboardButton(models.Edit)
+	buttons.Approve = tgbotapi.NewKeyboardButton(models.Approve)
+	buttons.Ban = tgbotapi.NewKeyboardButton(models.Ban)
+	buttons.Unban = tgbotapi.NewKeyboardButton(models.Unban)
+	buttons.Inbox = tgbotapi.NewKeyboardButton(models.Inbox)
+	buttons.Sent = tgbotapi.NewKeyboardButton(models.Sent)
+	buttons.New = tgbotapi.NewKeyboardButton(models.New)
+	buttons.Started = tgbotapi.NewKeyboardButton(models.TaskStatusStarted)
+	buttons.Rejected = tgbotapi.NewKeyboardButton(models.TaskStatusRejected)
+	buttons.Completed = tgbotapi.NewKeyboardButton(models.TaskStatusCompleted)
+	buttons.Closed = tgbotapi.NewKeyboardButton(models.TaskStatusClosed)
+	buttons.Save = tgbotapi.NewKeyboardButton(models.Save)
+	buttons.Cancel = tgbotapi.NewKeyboardButton(models.Cancel)
+	buttons.Start = tgbotapi.NewKeyboardButton(models.Start)
+	buttons.Complete = tgbotapi.NewKeyboardButton(models.Complete)
+	buttons.History = tgbotapi.NewKeyboardButton(models.History)
+	buttons.Close = tgbotapi.NewKeyboardButton(models.Close)
+	buttons.Reject = tgbotapi.NewKeyboardButton(models.Reject)
 
 	bot.Debug = false
 	log.Printf("Authorized on account %s", bot.Self.UserName)
