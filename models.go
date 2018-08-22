@@ -115,6 +115,7 @@ type History struct {
 }
 
 type Buttons struct {
+	Main		tgbotapi.KeyboardButton
 	Next      tgbotapi.KeyboardButton
 	Users     tgbotapi.KeyboardButton
 	Back      tgbotapi.KeyboardButton

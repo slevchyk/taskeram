@@ -12,6 +12,7 @@ const (
 	Approve     = "Approve"
 	Ban         = "Ban"
 	Unban       = "Unban"
+	Previous = "Previous"
 	Next        = "Next"
 	//Uncompleted = "Uncompleted"
 	//Completed   = "Completed"

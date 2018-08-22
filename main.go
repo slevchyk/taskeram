@@ -53,9 +53,9 @@ func main() {
 	inboxRules := make(map[string]AllowedActions)
 	sentRules := make(map[string]AllowedActions)
 
-	inboxRules[models.TaskStatusNew] = AllowedActions{models.Start, models.Comment, models.Comment, models.History}
-	inboxRules[models.TaskStatusStarted] = AllowedActions{models.Comment, models.Comment, models.History}
-	inboxRules[models.TaskStatusRejected] = AllowedActions{models.Comment, models.Comment, models.History}
+	inboxRules[models.TaskStatusNew] = AllowedActions{models.Start, models.Complete, models.Comment, models.History}
+	inboxRules[models.TaskStatusStarted] = AllowedActions{models.Complete, models.Comment, models.History}
+	inboxRules[models.TaskStatusRejected] = AllowedActions{models.Complete, models.Comment, models.History}
 	inboxRules[models.TaskStatusCompleted] = AllowedActions{models.History}
 	inboxRules[models.TaskStatusClosed] = AllowedActions{models.History}
 	taskRules["Inbox"] = inboxRules
@@ -72,6 +72,7 @@ func main() {
 	actionStatus[models.Reject] = models.TaskStatusRejected
 	actionStatus[models.Close] = models.TaskStatusClosed
 
+	buttons.Main = tgbotapi.NewKeyboardButton(models.Main)
 	buttons.Next = tgbotapi.NewKeyboardButton(models.Next)
 	buttons.Users = tgbotapi.NewKeyboardButton(models.Users)
 	buttons.Back = tgbotapi.NewKeyboardButton(models.Back)
@@ -403,6 +404,12 @@ func serveUser(c *UserCache) {
 			handleInboxCompleted(c)
 		} else if cm == models.MenuInbox && msg == models.TaskStatusClosed {
 			handleInboxClosed(c)
+		} else if cm == models.MenuInboxNew && msg == models.Back {
+			handleInbox(c)
+		//} else if cm == models.MenuInboxNew && msg == models.Main {
+		//	handleMain(c)
+		} else if cm == models.MenuInboxNew {
+			handleInboxNew(c)
 		} else if cm == models.MenuMain && msg == models.Sent {
 			handleSent(c)
 		} else if cm == models.MenuSent && msg == models.Back {
@@ -1296,6 +1303,22 @@ func handleSent(c *UserCache) {
 
 }
 
+func backToInbox(c *UserCache) {
+	c.editingTaskIndx = 0
+	c.currentMenu = models.MenuInbox
+
+	//видалимо повідомлення із слайдера
+	if c.currentMessage != 0 {
+		bot.DeleteMessage(tgbotapi.DeleteMessageConfig{
+			ChatID:    c.ChatID,
+			MessageID: c.currentMessage,
+		})
+		c.currentMessage = 0
+	}
+
+	handleInbox(c)
+}
+
 func handleInboxNew(c *UserCache) {
 
 	c.currentMenu = models.MenuInboxNew
@@ -1351,16 +1374,20 @@ func handleInboxNew(c *UserCache) {
 			return
 		}
 
-		editingTask = 1
 		c.tasks = tasks
-		c.editingTaskIndx = editingTask
+		c.editingTaskIndx = 1
 	}
 
 	if doAction {
 		msgText = c.Text
 	} else {
 		msgText = ""
-		c.TaskID = tasks[editingTask].ID
+		c.TaskID = tasks[c.editingTaskIndx].ID
+
+		msg := tgbotapi.NewMessage(c.ChatID, "Menu inbox->new:")
+		msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(tgbotapi.NewKeyboardButtonRow(buttons.Inbox))
+		bot.Send(msg)
+
 		showTask(c)
 		return
 	}
@@ -1371,13 +1398,10 @@ func handleInboxNew(c *UserCache) {
 		editingTask++
 
 		if editingTask > len(tasks) {
-			c.editingTaskIndx = 0
-			c.currentMenu = models.MenuInbox
-
 			msg := tgbotapi.NewMessage(c.ChatID, "No more new tasks. It was last one")
 			bot.Send(msg)
 
-			handleInbox(c)
+			backToInbox(c)
 			return
 		}
 
@@ -1385,6 +1409,27 @@ func handleInboxNew(c *UserCache) {
 		c.TaskID = tasks[editingTask].ID
 
 		showTask(c)
+	case models.Previous:
+		editingTask--
+
+		if editingTask == 0 {
+			msg := tgbotapi.NewMessage(c.ChatID, "No more new tasks. It was first one")
+			bot.Send(msg)
+
+			backToInbox(c)
+			return
+		}
+
+		c.editingTaskIndx = editingTask
+		c.TaskID = tasks[editingTask].ID
+
+		showTask(c)
+	case models.Back:
+		backToInbox(c)
+		return
+	case models.Inbox:
+		backToInbox(c)
+		return
 	}
 }
 
@@ -1781,8 +1826,7 @@ func handleNew(c *UserCache) {
 				u.last_name
 			FROM users u
 			WHERE
-				u.approved=1
-				AND u.banned=0`)
+				u.status=?`, models.UserApprowed)
 			if err != nil {
 				c.currentMenu = models.MenuMain
 				c.editingUserIndx = 0
@@ -2194,6 +2238,18 @@ func handleCallbackQuery(c *UserCache) {
 				return
 			}
 			addComment(c)
+		}
+	case models.Previous:
+		c.Text = models.Previous
+		switch c.currentMenu {
+		case models.MenuInboxNew:
+			handleInboxNew(c)
+		}
+	case models.Next:
+		c.Text = models.Next
+		switch c.currentMenu {
+		case models.MenuInboxNew:
+			handleInboxNew(c)
 		}
 	}
 }
@@ -2635,15 +2691,29 @@ func showTask(c *UserCache) {
 	rule := taskRules[taskType][t.Status]
 
 	var btnRow []tgbotapi.InlineKeyboardButton
+	var kbdReply [][]tgbotapi.InlineKeyboardButton
 	for _, val := range rule {
 		btnRow = append(btnRow, tgbotapi.NewInlineKeyboardButtonData(val, fmt.Sprintf("%v|%v", val, t.ID)))
 	}
 
-	//btnStart := tgbotapi.NewInlineKeyboardButtonData("Start 🚀", fmt.Sprintf("Start|%v", t.ID))
-	//btnComplete := tgbotapi.NewInlineKeyboardButtonData("Complete 🏁", fmt.Sprintf("Complete|%v", t.ID))
-	//btnHistory := tgbotapi.NewInlineKeyboardButtonData("History 📖", fmt.Sprintf("History|%v", t.ID))
-	//btnRow := tgbotapi.NewInlineKeyboardRow(btnStart, btnComplete, btnHistory)
-	replyMarkup := tgbotapi.NewInlineKeyboardMarkup(btnRow)
+	kbdReply = append(kbdReply, btnRow)
+
+	//ми прийшли сюди з меню задач. Запсукаємо слайдер
+	if c.editingTaskIndx != 0 {
+		var btnRowNavigation []tgbotapi.InlineKeyboardButton
+
+		if c.editingTaskIndx > 1 {
+			btnRowNavigation = append(btnRowNavigation, tgbotapi.NewInlineKeyboardButtonData("← Previous", models.Previous))
+		}
+
+		if c.editingTaskIndx < len(c.tasks) {
+			btnRowNavigation = append(btnRowNavigation, tgbotapi.NewInlineKeyboardButtonData("Next →", models.Next))
+		}
+
+		kbdReply = append(kbdReply, btnRowNavigation)
+	}
+
+	replyMarkup := tgbotapi.NewInlineKeyboardMarkup(kbdReply...)
 
 	var msgSent tgbotapi.Message
 	if c.currentMessage == 0 {
@@ -2653,7 +2723,7 @@ func showTask(c *UserCache) {
 		msgSent, err = bot.Send(msg)
 	} else {
 		msg := tgbotapi.NewEditMessageText(c.ChatID, c.currentMessage, reply)
-		//msg.ReplyMarkup = replyMarkup
+		msg.BaseEdit.ReplyMarkup = &replyMarkup
 		msg.ParseMode = "HTML"
 		msgSent, err = bot.Send(msg)
 	}
