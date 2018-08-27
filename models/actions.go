@@ -1,32 +1,32 @@
 package models
 
 const (
-	Main        = "Main"
-	Users       = "Users"
-	Back        = "Back"
-	View        = "View"
-	All         = "All"
-	Requests    = "Requests"
-	Banned      = "Banned"
-	Edit        = "Edit"
-	Approve     = "Approve"
-	Ban         = "Ban"
-	Unban       = "Unban"
+	Main     = "Main"
+	Users    = "Users"
+	Back     = "Back"
+	View     = "View"
+	All      = "All"
+	Requests = "Requests"
+	Banned   = "Banned"
+	Edit     = "Edit"
+	Approve  = "Approve"
+	Ban      = "Ban"
+	Unban    = "Unban"
 	Previous = "Previous"
-	Next        = "Next"
+	Next     = "Next"
 	//Uncompleted = "Uncompleted"
 	//Completed   = "Completed"
-	Inbox       = "Inbox"
-	Sent        = "Sent"
-	New         = "New"
-	Save        = "Save"
-	Cancel      = "Cancel"
-	Start       = "Start"
-	Complete    = "Complete"
-	History     = "History"
-	Close       = "Close"
-	Reject      = "Reject"
-	Comment     = "Comment"
+	Inbox    = "Inbox"
+	Sent     = "Sent"
+	New      = "New"
+	Save     = "Save"
+	Cancel   = "Cancel"
+	Start    = "Start"
+	Complete = "Complete"
+	History  = "History"
+	Close    = "Close"
+	Reject   = "Reject"
+	Comment  = "Comment"
 )
 
 const (
@@ -39,7 +39,16 @@ const (
 	MenuUsersEditUnban   = Users + Edit + Unban
 	MenuInbox            = Inbox
 	MenuInboxNew         = Inbox + New
+	MenuInboxStarted     = Inbox + TaskStatusStarted
+	MenuInboxCompleted   = Inbox + TaskStatusCompleted
+	MenuInboxRejected    = Inbox + TaskStatusRejected
+	MenuInboxClosed      = Inbox + TaskStatusClosed
 	MenuSent             = Sent
+	MenuSentNew          = Sent + New
+	MenuSentStarted      = Sent + TaskStatusStarted
+	MenuSentCompleted    = Sent + TaskStatusCompleted
+	MenuSentRejected     = Sent + TaskStatusRejected
+	MenuSentClosed       = Sent + TaskStatusClosed
 	MenuNew              = New
 	MenuComment          = Comment
 )

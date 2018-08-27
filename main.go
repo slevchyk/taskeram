@@ -394,26 +394,64 @@ func serveUser(c *UserCache) {
 			handleInbox(c)
 		} else if cm == models.MenuInbox && msg == models.Back {
 			handleMain(c)
-		} else if cm == models.MenuInbox && msg == models.New {
-			handleInboxNew(c)
+		} else if cm == models.MenuInbox && msg == models.TaskStatusNew {
+			handleInboxTasks(c, models.MenuInboxNew, msg)
 		} else if cm == models.MenuInbox && msg == models.TaskStatusStarted {
-			handleInboxStarted(c)
+			handleInboxTasks(c, models.MenuInboxStarted, msg)
 		} else if cm == models.MenuInbox && msg == models.TaskStatusRejected {
-			handleInboxRejected(c)
+			handleInboxTasks(c, models.MenuInboxRejected, msg)
 		} else if cm == models.MenuInbox && msg == models.TaskStatusCompleted {
-			handleInboxCompleted(c)
+			handleInboxTasks(c, models.MenuInboxCompleted, msg)
 		} else if cm == models.MenuInbox && msg == models.TaskStatusClosed {
-			handleInboxClosed(c)
-		} else if cm == models.MenuInboxNew && msg == models.Back {
+			handleInboxTasks(c, models.MenuInboxClosed, msg)
+		} else if (cm == models.MenuInboxNew ||
+			cm == models.MenuInboxStarted ||
+			cm == models.MenuInboxRejected ||
+			cm == models.MenuInboxCompleted ||
+			cm == models.MenuInboxClosed) &&
+			msg == models.Back {
 			handleInbox(c)
-		//} else if cm == models.MenuInboxNew && msg == models.Main {
-		//	handleMain(c)
 		} else if cm == models.MenuInboxNew {
-			handleInboxNew(c)
+			handleInboxTasks(c, cm, models.TaskStatusNew)
+		} else if cm == models.MenuInboxStarted {
+			handleInboxTasks(c, cm, models.TaskStatusStarted)
+		} else if cm == models.MenuInboxRejected {
+			handleInboxTasks(c, cm, models.TaskStatusRejected)
+		} else if cm == models.MenuInboxCompleted {
+			handleInboxTasks(c, cm, models.TaskStatusCompleted)
+		} else if cm == models.MenuInboxClosed {
+			handleInboxTasks(c, cm, models.TaskStatusClosed)
 		} else if cm == models.MenuMain && msg == models.Sent {
 			handleSent(c)
 		} else if cm == models.MenuSent && msg == models.Back {
 			handleMain(c)
+		} else if cm == models.MenuSent && msg == models.TaskStatusNew {
+			handleSentTasks(c, models.MenuSentNew, msg)
+		} else if cm == models.MenuSent && msg == models.TaskStatusStarted {
+			handleSentTasks(c, models.MenuSentStarted, msg)
+		} else if cm == models.MenuSent && msg == models.TaskStatusRejected {
+			handleSentTasks(c, models.MenuSentRejected, msg)
+		} else if cm == models.MenuSent && msg == models.TaskStatusCompleted {
+			handleSentTasks(c, models.MenuSentCompleted, msg)
+		} else if cm == models.MenuSent && msg == models.TaskStatusClosed {
+			handleSentTasks(c, models.MenuSentClosed, msg)
+		} else if (cm == models.MenuSentNew ||
+			cm == models.MenuSentStarted ||
+			cm == models.MenuSentRejected ||
+			cm == models.MenuSentCompleted ||
+			cm == models.MenuSentClosed) &&
+			msg == models.Back {
+			handleSent(c)
+		} else if cm == models.MenuSentNew {
+			handleSentTasks(c, cm, models.TaskStatusNew)
+		} else if cm == models.MenuSentStarted {
+			handleSentTasks(c, cm, models.TaskStatusStarted)
+		} else if cm == models.MenuSentRejected {
+			handleSentTasks(c, cm, models.TaskStatusRejected)
+		} else if cm == models.MenuSentCompleted {
+			handleSentTasks(c, cm, models.TaskStatusCompleted)
+		} else if cm == models.MenuSentClosed {
+			handleSentTasks(c, cm, models.TaskStatusClosed)
 		} else if cm == models.MenuMain && msg == models.New {
 			handleNew(c)
 		} else if cm == models.MenuNew {
@@ -1281,23 +1319,7 @@ func handleInbox(c *UserCache) {
 	row3 := tgbotapi.NewKeyboardButtonRow(buttons.Completed, buttons.Closed)
 	markup := tgbotapi.NewReplyKeyboard(row1, row2, row3)
 
-	msg := tgbotapi.NewMessage(c.ChatID, "Inbox:")
-	msg.ReplyMarkup = markup
-	bot.Send(msg)
-
-}
-
-func handleSent(c *UserCache) {
-
-	c.currentMenu = models.MenuInbox
-	c.editingUserIndx = 0
-	c.NewTask = nil
-
-	row1 := tgbotapi.NewKeyboardButtonRow(buttons.Back)
-	row2 := tgbotapi.NewKeyboardButtonRow(buttons.New, buttons.Started, buttons.Completed)
-	markup := tgbotapi.NewReplyKeyboard(row1, row2)
-
-	msg := tgbotapi.NewMessage(c.ChatID, "Inbox:")
+	msg := tgbotapi.NewMessage(c.ChatID, "Menu: Inbox")
 	msg.ReplyMarkup = markup
 	bot.Send(msg)
 
@@ -1306,6 +1328,7 @@ func handleSent(c *UserCache) {
 func backToInbox(c *UserCache) {
 	c.editingTaskIndx = 0
 	c.currentMenu = models.MenuInbox
+	c.tasks = nil
 
 	//видалимо повідомлення із слайдера
 	if c.currentMessage != 0 {
@@ -1319,9 +1342,43 @@ func backToInbox(c *UserCache) {
 	handleInbox(c)
 }
 
-func handleInboxNew(c *UserCache) {
+func handleSent(c *UserCache) {
 
-	c.currentMenu = models.MenuInboxNew
+	c.currentMenu = models.MenuSent
+	c.editingUserIndx = 0
+	c.NewTask = nil
+
+	row1 := tgbotapi.NewKeyboardButtonRow(buttons.Back)
+	row2 := tgbotapi.NewKeyboardButtonRow(buttons.New, buttons.Started, buttons.Rejected)
+	row3 := tgbotapi.NewKeyboardButtonRow(buttons.Completed, buttons.Closed)
+	markup := tgbotapi.NewReplyKeyboard(row1, row2, row3)
+
+	msg := tgbotapi.NewMessage(c.ChatID, "Menu: Sent")
+	msg.ReplyMarkup = markup
+	bot.Send(msg)
+
+}
+
+func backToSent(c *UserCache) {
+	c.editingTaskIndx = 0
+	c.currentMenu = models.MenuSent
+	c.tasks = nil
+
+	//видалимо повідомлення із слайдера
+	if c.currentMessage != 0 {
+		bot.DeleteMessage(tgbotapi.DeleteMessageConfig{
+			ChatID:    c.ChatID,
+			MessageID: c.currentMessage,
+		})
+		c.currentMessage = 0
+	}
+
+	handleSent(c)
+}
+
+func handleInboxTasks(c *UserCache, menu string, status string) {
+
+	c.currentMenu = menu
 
 	editingTask := c.editingTaskIndx
 	tasks := c.tasks
@@ -1345,9 +1402,10 @@ func handleInboxNew(c *UserCache) {
 			t.to_user=?
 			AND t.status=?
 		ORDER BY
-			t.id`, c.User.TelegramID, models.TaskStatusNew)
+			t.id`, c.User.TelegramID, status)
 		if err != nil {
-			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting new tasks")
+			reply := fmt.Sprintf("Something went wrong while selecting %v tasks", status)
+			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
 			bot.Send(msg)
 
@@ -1368,7 +1426,8 @@ func handleInboxNew(c *UserCache) {
 		}
 
 		if len(tasks) == 0 {
-			msg := tgbotapi.NewMessage(c.ChatID, "I have no new tasks")
+			reply := fmt.Sprintf("I have no %v tasks", status)
+			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			bot.Send(msg)
 			handleInbox(c)
 			return
@@ -1384,7 +1443,8 @@ func handleInboxNew(c *UserCache) {
 		msgText = ""
 		c.TaskID = tasks[c.editingTaskIndx].ID
 
-		msg := tgbotapi.NewMessage(c.ChatID, "Menu inbox->new:")
+		reply := fmt.Sprintf("Menu Inbox->%v:", status)
+		msg := tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(tgbotapi.NewKeyboardButtonRow(buttons.Inbox))
 		bot.Send(msg)
 
@@ -1398,7 +1458,8 @@ func handleInboxNew(c *UserCache) {
 		editingTask++
 
 		if editingTask > len(tasks) {
-			msg := tgbotapi.NewMessage(c.ChatID, "No more new tasks. It was last one")
+			reply := fmt.Sprintf("No more %v tasks. It was last one", status)
+			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			bot.Send(msg)
 
 			backToInbox(c)
@@ -1413,7 +1474,8 @@ func handleInboxNew(c *UserCache) {
 		editingTask--
 
 		if editingTask == 0 {
-			msg := tgbotapi.NewMessage(c.ChatID, "No more new tasks. It was first one")
+			reply := fmt.Sprintf("No more %v tasks. It was first one", status)
+			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			bot.Send(msg)
 
 			backToInbox(c)
@@ -1433,101 +1495,9 @@ func handleInboxNew(c *UserCache) {
 	}
 }
 
-func handleInboxStarted(c *UserCache) {
+func handleSentTasks(c *UserCache, menu string, status string) {
 
-	c.currentMenu = models.MenuInboxNew
-
-	editingTask := c.editingTaskIndx
-	tasks := c.tasks
-
-	var t dbTasks
-	var msgText string
-
-	doAction := true
-
-	if editingTask == 0 {
-		doAction = false
-
-		rows, err := db.Query(`
-		SELECT
-			t.ID,
-			t.title,
-			t.description,
-			t.changed_at			
-		FROM tasks t
-		WHERE
-			t.to_user=?
-			AND t.status=?
-		ORDER BY
-			t.id`, c.User.TelegramID, models.TaskStatusStarted)
-		if err != nil {
-			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting started tasks")
-			msg.ParseMode = "HTML"
-			bot.Send(msg)
-
-			c.Text = ""
-			handleInbox(c)
-			return
-		}
-		defer rows.Close()
-
-		tasks = make(map[int]dbTasks)
-
-		i := 1
-		for rows.Next() {
-			rows.Scan(&t.ID, &t.Title, &t.Description, &t.ChangedAt)
-
-			tasks[i] = t
-			i++
-		}
-
-		if len(tasks) == 0 {
-			msg := tgbotapi.NewMessage(c.ChatID, "I have no started tasks")
-			bot.Send(msg)
-			handleInbox(c)
-			return
-		}
-
-		editingTask = 1
-		c.tasks = tasks
-		c.editingTaskIndx = editingTask
-	}
-
-	if doAction {
-		msgText = c.Text
-	} else {
-		msgText = ""
-		c.TaskID = tasks[editingTask].ID
-		showTask(c)
-		return
-	}
-
-	switch msgText {
-	case models.Next:
-
-		editingTask++
-
-		if editingTask > len(tasks) {
-			c.editingTaskIndx = 0
-			c.currentMenu = models.MenuInbox
-
-			msg := tgbotapi.NewMessage(c.ChatID, "No more started tasks. It was last one")
-			bot.Send(msg)
-
-			handleInbox(c)
-			return
-		}
-
-		c.editingTaskIndx = editingTask
-		c.TaskID = tasks[editingTask].ID
-
-		showTask(c)
-	}
-}
-
-func handleInboxRejected(c *UserCache) {
-
-	c.currentMenu = models.MenuInboxNew
+	c.currentMenu = menu
 
 	editingTask := c.editingTaskIndx
 	tasks := c.tasks
@@ -1548,17 +1518,18 @@ func handleInboxRejected(c *UserCache) {
 			t.changed_at			
 		FROM tasks t
 		WHERE
-			t.to_user=?
+			t.from_user=?
 			AND t.status=?
 		ORDER BY
-			t.id`, c.User.TelegramID, models.TaskStatusRejected)
+			t.id`, c.User.TelegramID, status)
 		if err != nil {
-			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting rejected tasks")
+			reply := fmt.Sprintf("Something went wrong while selecting %v tasks", status)
+			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
 			bot.Send(msg)
 
 			c.Text = ""
-			handleInbox(c)
+			handleSent(c)
 			return
 		}
 		defer rows.Close()
@@ -1574,22 +1545,28 @@ func handleInboxRejected(c *UserCache) {
 		}
 
 		if len(tasks) == 0 {
-			msg := tgbotapi.NewMessage(c.ChatID, "I have no rejected tasks")
+			reply := fmt.Sprintf("I have no %v tasks", status)
+			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			bot.Send(msg)
-			handleInbox(c)
+			handleSent(c)
 			return
 		}
 
-		editingTask = 1
 		c.tasks = tasks
-		c.editingTaskIndx = editingTask
+		c.editingTaskIndx = 1
 	}
 
 	if doAction {
 		msgText = c.Text
 	} else {
 		msgText = ""
-		c.TaskID = tasks[editingTask].ID
+		c.TaskID = tasks[c.editingTaskIndx].ID
+
+		reply := fmt.Sprintf("Menu Sent->%v:", status)
+		msg := tgbotapi.NewMessage(c.ChatID, reply)
+		msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(tgbotapi.NewKeyboardButtonRow(buttons.Sent))
+		bot.Send(msg)
+
 		showTask(c)
 		return
 	}
@@ -1600,13 +1577,11 @@ func handleInboxRejected(c *UserCache) {
 		editingTask++
 
 		if editingTask > len(tasks) {
-			c.editingTaskIndx = 0
-			c.currentMenu = models.MenuInbox
-
-			msg := tgbotapi.NewMessage(c.ChatID, "No more rejected tasks. It was last one")
+			reply := fmt.Sprintf("No more %v tasks. It was last one", status)
+			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			bot.Send(msg)
 
-			handleInbox(c)
+			backToSent(c)
 			return
 		}
 
@@ -1614,190 +1589,28 @@ func handleInboxRejected(c *UserCache) {
 		c.TaskID = tasks[editingTask].ID
 
 		showTask(c)
-	}
-}
+	case models.Previous:
+		editingTask--
 
-func handleInboxCompleted(c *UserCache) {
-
-	c.currentMenu = models.MenuInboxNew
-
-	editingTask := c.editingTaskIndx
-	tasks := c.tasks
-
-	var t dbTasks
-	var msgText string
-
-	doAction := true
-
-	if editingTask == 0 {
-		doAction = false
-
-		rows, err := db.Query(`
-		SELECT
-			t.ID,
-			t.title,
-			t.description,
-			t.changed_at			
-		FROM tasks t
-		WHERE
-			t.to_user=?
-			AND t.status=?
-		ORDER BY
-			t.id`, c.User.TelegramID, models.TaskStatusCompleted)
-		if err != nil {
-			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting completed tasks")
-			msg.ParseMode = "HTML"
+		if editingTask == 0 {
+			reply := fmt.Sprintf("No more %v tasks. It was first one", status)
+			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			bot.Send(msg)
 
-			c.Text = ""
-			handleInbox(c)
-			return
-		}
-		defer rows.Close()
-
-		tasks = make(map[int]dbTasks)
-
-		i := 1
-		for rows.Next() {
-			rows.Scan(&t.ID, &t.Title, &t.Description, &t.ChangedAt)
-
-			tasks[i] = t
-			i++
-		}
-
-		if len(tasks) == 0 {
-			msg := tgbotapi.NewMessage(c.ChatID, "I have no completed tasks")
-			bot.Send(msg)
-			handleInbox(c)
+			backToSent(c)
 			return
 		}
 
-		editingTask = 1
-		c.tasks = tasks
 		c.editingTaskIndx = editingTask
-	}
-
-	if doAction {
-		msgText = c.Text
-	} else {
-		msgText = ""
 		c.TaskID = tasks[editingTask].ID
+
 		showTask(c)
+	case models.Back:
+		backToSent(c)
 		return
-	}
-
-	switch msgText {
-	case models.Next:
-
-		editingTask++
-
-		if editingTask > len(tasks) {
-			c.editingTaskIndx = 0
-			c.currentMenu = models.MenuInbox
-
-			msg := tgbotapi.NewMessage(c.ChatID, "No more completed tasks. It was last one")
-			bot.Send(msg)
-
-			handleInbox(c)
-			return
-		}
-
-		c.editingTaskIndx = editingTask
-		c.TaskID = tasks[editingTask].ID
-
-		showTask(c)
-	}
-}
-
-func handleInboxClosed(c *UserCache) {
-
-	c.currentMenu = models.MenuInboxNew
-
-	editingTask := c.editingTaskIndx
-	tasks := c.tasks
-
-	var t dbTasks
-	var msgText string
-
-	doAction := true
-
-	if editingTask == 0 {
-		doAction = false
-
-		rows, err := db.Query(`
-		SELECT
-			t.ID,
-			t.title,
-			t.description,
-			t.changed_at			
-		FROM tasks t
-		WHERE
-			t.to_user=?
-			AND t.status=?
-		ORDER BY
-			t.id`, c.User.TelegramID, models.TaskStatusClosed)
-		if err != nil {
-			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting closed tasks")
-			msg.ParseMode = "HTML"
-			bot.Send(msg)
-
-			c.Text = ""
-			handleInbox(c)
-			return
-		}
-		defer rows.Close()
-
-		tasks = make(map[int]dbTasks)
-
-		i := 1
-		for rows.Next() {
-			rows.Scan(&t.ID, &t.Title, &t.Description, &t.ChangedAt)
-
-			tasks[i] = t
-			i++
-		}
-
-		if len(tasks) == 0 {
-			msg := tgbotapi.NewMessage(c.ChatID, "I have no closed tasks")
-			bot.Send(msg)
-			handleInbox(c)
-			return
-		}
-
-		editingTask = 1
-		c.tasks = tasks
-		c.editingTaskIndx = editingTask
-	}
-
-	if doAction {
-		msgText = c.Text
-	} else {
-		msgText = ""
-		c.TaskID = tasks[editingTask].ID
-		showTask(c)
+	case models.Sent:
+		backToSent(c)
 		return
-	}
-
-	switch msgText {
-	case models.Next:
-
-		editingTask++
-
-		if editingTask > len(tasks) {
-			c.editingTaskIndx = 0
-			c.currentMenu = models.MenuInbox
-
-			msg := tgbotapi.NewMessage(c.ChatID, "No more closed tasks. It was last one")
-			bot.Send(msg)
-
-			handleInbox(c)
-			return
-		}
-
-		c.editingTaskIndx = editingTask
-		c.TaskID = tasks[editingTask].ID
-
-		showTask(c)
 	}
 }
 
@@ -2243,13 +2056,79 @@ func handleCallbackQuery(c *UserCache) {
 		c.Text = models.Previous
 		switch c.currentMenu {
 		case models.MenuInboxNew:
-			handleInboxNew(c)
+			handleInboxTasks(c, models.MenuInboxNew, models.TaskStatusNew)
+		case models.MenuInboxStarted:
+			handleInboxTasks(c, models.MenuInboxStarted, models.TaskStatusStarted)
+		case models.MenuInboxRejected:
+			handleInboxTasks(c, models.MenuInboxRejected, models.TaskStatusRejected)
+		case models.MenuInboxCompleted:
+			handleInboxTasks(c, models.MenuInboxCompleted, models.TaskStatusCompleted)
+		case models.MenuInboxClosed:
+			handleInboxTasks(c, models.MenuInboxClosed, models.TaskStatusClosed)
+		case models.MenuSentNew:
+			handleSentTasks(c, models.MenuSentNew, models.TaskStatusNew)
+		case models.MenuSentStarted:
+			handleSentTasks(c, models.MenuSentStarted, models.TaskStatusStarted)
+		case models.MenuSentRejected:
+			handleSentTasks(c, models.MenuSentRejected, models.TaskStatusRejected)
+		case models.MenuSentCompleted:
+			handleSentTasks(c, models.MenuSentCompleted, models.TaskStatusCompleted)
+		case models.MenuSentClosed:
+			handleSentTasks(c, models.MenuSentClosed, models.TaskStatusClosed)
+		default:
+			c.editingTaskIndx = 0
+			c.currentMenu = models.MenuMain
+			c.tasks = nil
+
+			//видалимо повідомлення із слайдера
+			if c.currentMessage != 0 {
+				bot.DeleteMessage(tgbotapi.DeleteMessageConfig{
+					ChatID:    c.ChatID,
+					MessageID: c.currentMessage,
+				})
+				c.currentMessage = 0
+			}
+
+			handleMain(c)
 		}
 	case models.Next:
 		c.Text = models.Next
 		switch c.currentMenu {
 		case models.MenuInboxNew:
-			handleInboxNew(c)
+			handleInboxTasks(c, models.MenuInboxNew, models.TaskStatusNew)
+		case models.MenuInboxStarted:
+			handleInboxTasks(c, models.MenuInboxStarted, models.TaskStatusStarted)
+		case models.MenuInboxRejected:
+			handleInboxTasks(c, models.MenuInboxRejected, models.TaskStatusRejected)
+		case models.MenuInboxCompleted:
+			handleInboxTasks(c, models.MenuInboxCompleted, models.TaskStatusCompleted)
+		case models.MenuInboxClosed:
+			handleInboxTasks(c, models.MenuInboxClosed, models.TaskStatusClosed)
+		case models.MenuSentNew:
+			handleSentTasks(c, models.MenuSentNew, models.TaskStatusNew)
+		case models.MenuSentStarted:
+			handleSentTasks(c, models.MenuSentStarted, models.TaskStatusStarted)
+		case models.MenuSentRejected:
+			handleSentTasks(c, models.MenuSentRejected, models.TaskStatusRejected)
+		case models.MenuSentCompleted:
+			handleSentTasks(c, models.MenuSentCompleted, models.TaskStatusCompleted)
+		case models.MenuSentClosed:
+			handleSentTasks(c, models.MenuSentClosed, models.TaskStatusClosed)
+		default:
+			c.editingTaskIndx = 0
+			c.currentMenu = models.MenuMain
+			c.tasks = nil
+
+			//видалимо повідомлення із слайдера
+			if c.currentMessage != 0 {
+				bot.DeleteMessage(tgbotapi.DeleteMessageConfig{
+					ChatID:    c.ChatID,
+					MessageID: c.currentMessage,
+				})
+				c.currentMessage = 0
+			}
+
+			handleMain(c)
 		}
 	}
 }
@@ -2502,7 +2381,7 @@ func newUserAccpet(c *UserCache, ID string) {
 	}
 
 	timeNow := time.Now().UTC()
-	_, err = stmt.Exec(models.UserApprowed, c.User.TelegramID, timeNow,  u.TelegramID)
+	_, err = stmt.Exec(models.UserApprowed, c.User.TelegramID, timeNow, u.TelegramID)
 	if err != nil {
 		reply := fmt.Sprintf(`Can't approve '<a href="tg://user?id=%v">%v %v</a>. Err:%v`, u.TelegramID, u.FirstName, u.LastName, err.Error())
 		msg := tgbotapi.NewMessage(c.ChatID, reply)
