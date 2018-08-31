@@ -14,8 +14,6 @@ const (
 	Unban    = "Unban"
 	Previous = "Previous"
 	Next     = "Next"
-	//Uncompleted = "Uncompleted"
-	//Completed   = "Completed"
 	Inbox    = "Inbox"
 	Sent     = "Sent"
 	New      = "New"

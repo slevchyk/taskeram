@@ -16,17 +16,17 @@ import (
 
 var db *sql.DB
 var bot *tgbotapi.BotAPI
-var cache map[int]*UserCache
-var taskRules map[string]map[string]AllowedActions
+var cache map[int]*models.UserCache
+var taskRules map[string]map[string]models.AllowedActions
 var actionStatus map[string]string
-var buttons Buttons
+var buttons models.Buttons
 
 func init() {
 	var err error
 
 	db, err = sql.Open("sqlite3", "tasker.sqlite")
 	if err != nil {
-		log.Fatal("Can't connect to DB ", err.Error())
+		log.Fatal("Can'TDb connect to DB ", err.Error())
 	}
 
 	token := os.Getenv("TELEGRAM_TASKERAM_TOKEN")
@@ -45,25 +45,26 @@ func main() {
 
 	defer db.Close()
 
-	cache = make(map[int]*UserCache)
+	cache = make(map[int]*models.UserCache)
 
 	initDB()
 
-	taskRules = make(map[string]map[string]AllowedActions)
-	inboxRules := make(map[string]AllowedActions)
-	sentRules := make(map[string]AllowedActions)
+	taskRules = make(map[string]map[string]models.AllowedActions)
+	inboxRules := make(map[string]models.AllowedActions)
+	sentRules := make(map[string]models.AllowedActions)
 
-	inboxRules[models.TaskStatusNew] = AllowedActions{models.Start, models.Complete, models.Comment, models.History}
-	inboxRules[models.TaskStatusStarted] = AllowedActions{models.Complete, models.Comment, models.History}
-	inboxRules[models.TaskStatusRejected] = AllowedActions{models.Complete, models.Comment, models.History}
-	inboxRules[models.TaskStatusCompleted] = AllowedActions{models.History}
-	inboxRules[models.TaskStatusClosed] = AllowedActions{models.History}
+	inboxRules[models.TaskStatusNew] = models.AllowedActions{models.Start, models.Complete, models.Comment, models.History}
+	inboxRules[models.TaskStatusStarted] = models.AllowedActions{models.Complete, models.Comment, models.History}
+	inboxRules[models.TaskStatusRejected] = models.AllowedActions{models.Complete, models.Comment, models.History}
+	inboxRules[models.TaskStatusCompleted] = models.AllowedActions{models.History}
+	inboxRules[models.TaskStatusClosed] = models.AllowedActions{models.History}
 	taskRules["Inbox"] = inboxRules
 
-	sentRules[models.TaskStatusNew] = AllowedActions{models.Close, models.Comment, models.History}
-	sentRules[models.TaskStatusStarted] = AllowedActions{models.Close, models.Comment, models.History}
-	sentRules[models.TaskStatusCompleted] = AllowedActions{models.Reject, models.Comment, models.Close, models.History}
-	sentRules[models.TaskStatusClosed] = AllowedActions{models.History}
+	sentRules[models.TaskStatusNew] = models.AllowedActions{models.Close, models.Comment, models.History}
+	sentRules[models.TaskStatusStarted] = models.AllowedActions{models.Close, models.Comment, models.History}
+	sentRules[models.TaskStatusRejected] = models.AllowedActions{models.Close, models.Comment, models.History}
+	sentRules[models.TaskStatusCompleted] = models.AllowedActions{models.Reject, models.Comment, models.Close, models.History}
+	sentRules[models.TaskStatusClosed] = models.AllowedActions{models.History}
 	taskRules["Sent"] = sentRules
 
 	actionStatus = make(map[string]string)
@@ -103,16 +104,18 @@ func main() {
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
 	// инициализируем канал, куда будут прилетать обновления от API
-	var ucfg tgbotapi.UpdateConfig
+	//var ucfg tgbotapi.UpdateConfig
 
-	ucfg = tgbotapi.NewUpdate(0)
+	ucfg := tgbotapi.NewUpdate(0)
 	ucfg.Timeout = 60
 
 	upd, _ := bot.GetUpdatesChan(ucfg)
 	// читаем обновления из канала
 	for {
-		select {
-		case update := <-upd:
+		//select {
+		//case update := <-upd:
+
+		update := <-upd
 
 			var tgid int
 
@@ -130,7 +133,7 @@ func main() {
 
 			//Якщо в цього користувача ще не має власних налаштувань сесії, то ініціюємо їх
 			if _, ok := cache[tgid]; !ok {
-				cache[tgid] = &UserCache{User: u}
+				cache[tgid] = &models.UserCache{User: u}
 			}
 
 			c := cache[tgid]
@@ -174,7 +177,7 @@ func main() {
 
 				go serveUser(c)
 			}
-		}
+		//}
 	}
 }
 
@@ -190,7 +193,7 @@ func initDB() {
 			'status' TEXT,
 			'changed_by' INTEGER DEFAULT 0,
 			'changed_at' DATE,
-			'comments' TEXT DEFAULT "");`)
+			'comment' TEXT DEFAULT '');`)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -208,6 +211,15 @@ func initDB() {
 	}
 
 	_, err = db.Exec(`
+		CREATE TRIGGER IF NOT EXISTS update_user_history AFTER UPDATE ON users WHEN (old.status <> new.status)
+		BEGIN
+			INSERT INTO user_history(status, changed_by, changed_at, admin) values (new.status, new.changed_by, new.changed_at, new.admin);
+		END;`)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS  'tasks'(
 			'id' INTEGER PRIMARY KEY AUTOINCREMENT ,
 			'from_user' INTEGER NOT NULL,
@@ -216,10 +228,12 @@ func initDB() {
 			'changed_at' DATE NOT NULL,
 			'changed_by' INTEGER NOT NULL,			
 			'title' TEXT NOT NULL,
-			'description' TEXT DEFAULT "",
-			'comments' TEXT DEFAULT "",
-			'images' TEXT DEFAULT "",
-			'documents' TEXT DEFAULT "");`)
+			'description' TEXT DEFAULT '',
+			'comment' TEXT DEFAULT '',
+			'commented_at' DATE,
+			'commented_by' INTEGER,
+			'images' TEXT DEFAULT '',
+			'documents' TEXT DEFAULT '');`)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -231,17 +245,8 @@ func initDB() {
 			'tgid' INTEGER REFERENCES users,
 			'date' DATE,
 			'status' INTEGER,			
-			'comments' TEXT
+			'comment' TEXT
 			);`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(`
-		CREATE TRIGGER IF NOT EXISTS update_task_history AFTER UPDATE ON tasks WHEN (old.status <> new.status OR old.comments <> new.comments)
-		BEGIN
-			INSERT INTO task_history(date, status, taskid, comments, tgid) values (new.changed_at, new.status, new.id, new.comments, new.changed_by);
-		END;`)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -249,16 +254,37 @@ func initDB() {
 	_, err = db.Exec(`
 		CREATE TRIGGER IF NOT EXISTS insert_task_history AFTER INSERT ON tasks
 		BEGIN
-			INSERT INTO task_history(date, status, taskid, comments, tgid) values (new.changed_at, new.status, new.id, new.comments, new.changed_by);
+			INSERT INTO task_history(date, status, taskid, tgid) values (new.changed_at, new.status, new.id, new.changed_by);
 		END;`)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	_, err = db.Exec(`
-		CREATE TRIGGER IF NOT EXISTS update_user_history AFTER UPDATE ON users WHEN (old.status <> new.status)
+		CREATE TRIGGER IF NOT EXISTS update_task_history AFTER UPDATE ON tasks WHEN (old.status <> new.status)
 		BEGIN
-			INSERT INTO user_history(status, changed_by, changed_at, admin) values (new.status, new.changed_by, new.changed_at, new.admin);
+			INSERT INTO task_history(date, status, taskid, tgid) values (new.changed_at, new.status, new.id, new.changed_by);
+		END;`)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS 'task_comments'(
+			'id' INTEGER PRIMARY KEY AUTOINCREMENT,
+			'taskid' INTEGER REFERENCES tasks,
+			'tgid' INTEGER REFERENCES users,
+			'date' DATE,			
+			'comment' TEXT
+			);`)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = db.Exec(`
+		CREATE TRIGGER IF NOT EXISTS update_task_comments AFTER UPDATE ON tasks WHEN (old.comment <> new.comment)
+		BEGIN
+			INSERT INTO task_comments(taskid, tgid, date, comment) values (new.id, new.commented_by, new.commented_at,  new.comment);
 		END;`)
 	if err != nil {
 		log.Fatal(err)
@@ -276,10 +302,11 @@ func initDB() {
 
 	rows, err := db.Query(`
 		SELECT
-		u.id
-		FROM users u
+		UDb.id
+		FROM 
+			users UDb
 		WHERE
-			u.tgid=?`, tgID)
+			UDb.tgid=?`, tgID)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -297,7 +324,6 @@ func initDB() {
 			log.Fatal(err)
 		}
 	}
-
 }
 
 //запропонуємо користувачу зробити запит на активацію в програмі
@@ -314,7 +340,10 @@ func serveNewUser(update tgbotapi.Update) {
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, reply)
 	msg.ReplyMarkup = &keyboard
 
-	bot.Send(msg)
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 func serveBannedUser(update tgbotapi.Update) {
@@ -324,7 +353,10 @@ func serveBannedUser(update tgbotapi.Update) {
 	reply := fmt.Sprintf("Hello, %s %s. I'm so sorry but yor request was declined.\nAsk admins to restore your account", ut.FirstName, ut.LastName)
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, reply)
 
-	bot.Send(msg)
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 func serveNonApprovedUser(update tgbotapi.Update) {
@@ -334,10 +366,13 @@ func serveNonApprovedUser(update tgbotapi.Update) {
 	reply := fmt.Sprintf("Hello, %s %s. Keep calm and wait for approval message!\n", ut.FirstName, ut.LastName)
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, reply)
 
-	bot.Send(msg)
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
-func serveUser(c *UserCache) {
+func serveUser(c *models.UserCache) {
 
 	//опрацюємо текстове повідомлення від користувача
 	if c.Message != nil {
@@ -353,7 +388,7 @@ func serveUser(c *UserCache) {
 			return
 		}
 
-		cm := c.currentMenu
+		cm := c.CurrentMenu
 		msg := c.Text
 
 		if cm == models.MenuMain && msg == models.Users {
@@ -464,7 +499,7 @@ func serveUser(c *UserCache) {
 	}
 }
 
-func handleCommand(c *UserCache) {
+func handleCommand(c *models.UserCache) {
 
 	switch c.Command {
 	case "start":
@@ -473,12 +508,15 @@ func handleCommand(c *UserCache) {
 		handleCommandTask(c)
 		return
 	case "history":
-		handleHistoryTask(c)
+		handleTaskHistory(c)
+		return
+	case "comments":
+		handleTaskComment(c)
 		return
 	}
 }
 
-func handleCommandStart(c *UserCache) {
+func handleCommandStart(c *models.UserCache) {
 
 	//команда старт в нас обробляється тільки для адміністратора
 	envID := os.Getenv("TELEGRAM_TASKERAM_ADMIN")
@@ -497,10 +535,11 @@ func handleCommandStart(c *UserCache) {
 
 	rows, err := db.Query(`
 		SELECT
-		u.id
-		FROM users u
+		UDb.id
+		FROM 
+			users UDb
 		WHERE
-			u.tgid=?`, tgID)
+			UDb.tgid=?`, tgID)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -529,51 +568,94 @@ func handleCommandStart(c *UserCache) {
 	}
 }
 
-func handleCommandTask(c *UserCache) {
+func handleCommandTask(c *models.UserCache) {
 
 	var err error
 	if c.Arguments == "" {
-		msg := tgbotapi.NewMessage(c.ChatID, fmt.Sprintln(c.Arguments, "you should input task number after /task command "))
-		bot.Send(msg)
+		msg := tgbotapi.NewMessage(c.ChatID, fmt.Sprintln(c.Arguments, "you should input Task number after /Task command "))
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	c.TaskID, err = strconv.Atoi(c.Arguments)
 	if err != nil {
 		msg := tgbotapi.NewMessage(c.ChatID, fmt.Sprintln(c.Arguments, " - wrong argument type"))
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
-	c.currentMessage = 0
+	c.CurrentMessage = 0
 
 	showTask(c)
 }
 
-func handleHistoryTask(c *UserCache) {
+func handleTaskHistory(c *models.UserCache) {
 
 	var err error
 
 	if c.Arguments == "" {
-		msg := tgbotapi.NewMessage(c.ChatID, fmt.Sprintln(c.Arguments, "you should input task number after /task command "))
-		bot.Send(msg)
+		msg := tgbotapi.NewMessage(c.ChatID, fmt.Sprintln(c.Arguments, "you should input Task number after /Task command "))
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	c.TaskID, err = strconv.Atoi(c.Arguments)
 	if err != nil {
 		msg := tgbotapi.NewMessage(c.ChatID, fmt.Sprintln(c.Arguments, " - wrong argument type"))
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
+
+	c.CallbackID = ""
 
 	showHistory(c)
 	handleMain(c)
 }
 
-func handleMain(c *UserCache) {
+func handleTaskComment(c *models.UserCache) {
 
-	c.currentMenu = models.MenuMain
+	var err error
+
+	if c.Arguments == "" {
+		msg := tgbotapi.NewMessage(c.ChatID, fmt.Sprintln(c.Arguments, "you should input Task number after /Task command "))
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
+		return
+	}
+
+	c.TaskID, err = strconv.Atoi(c.Arguments)
+	if err != nil {
+		msg := tgbotapi.NewMessage(c.ChatID, fmt.Sprintln(c.Arguments, " - wrong argument type"))
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
+		return
+	}
+
+	c.CallbackID = ""
+
+	showComments(c)
+	handleMain(c)
+}
+
+func handleMain(c *models.UserCache) {
+
+	c.CurrentMenu = models.MenuMain
 	chatID := c.Message.Chat.ID
 
 	var kbrd [][]tgbotapi.KeyboardButton
@@ -589,18 +671,21 @@ func handleMain(c *UserCache) {
 
 	msg := tgbotapi.NewMessage(chatID, "Main menu:")
 	msg.ReplyMarkup = markup
-	bot.Send(msg)
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
-func handleUsers(c *UserCache) {
+func handleUsers(c *models.UserCache) {
 
 	if c.User.Admin == 0 {
-		c.currentMenu = models.MenuMain
+		c.CurrentMenu = models.MenuMain
 		handleMain(c)
 		return
 	}
 
-	c.currentMenu = models.MenuUsers
+	c.CurrentMenu = models.MenuUsers
 
 	btnRow1 := tgbotapi.NewKeyboardButtonRow(buttons.Back)
 	btnRow2 := tgbotapi.NewKeyboardButtonRow(buttons.View, buttons.Edit)
@@ -611,18 +696,21 @@ func handleUsers(c *UserCache) {
 	msg := tgbotapi.NewMessage(c.ChatID, "Users menu:")
 	msg.ReplyMarkup = markup
 
-	bot.Send(msg)
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
-func handleUsersView(c *UserCache) {
+func handleUsersView(c *models.UserCache) {
 
 	if c.User.Admin == 0 {
-		c.currentMenu = models.MenuMain
+		c.CurrentMenu = models.MenuMain
 		handleMain(c)
 		return
 	}
 
-	c.currentMenu = models.MenuUsersView
+	c.CurrentMenu = models.MenuUsersView
 
 	btnRow1 := tgbotapi.NewKeyboardButtonRow(buttons.Back)
 	btnRow2 := tgbotapi.NewKeyboardButtonRow(buttons.All, buttons.Requests, buttons.Banned)
@@ -630,16 +718,19 @@ func handleUsersView(c *UserCache) {
 	markup := tgbotapi.NewReplyKeyboard(btnRow1, btnRow2)
 	markup.Selective = true
 
-	msg := tgbotapi.NewMessage(c.ChatID, "View users:")
+	msg := tgbotapi.NewMessage(c.ChatID, "View Users")
 	msg.ReplyMarkup = markup
 
-	bot.Send(msg)
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
-func handleUsersViewALl(c *UserCache) {
+func handleUsersViewALl(c *models.UserCache) {
 
 	if c.User.Admin == 0 {
-		c.currentMenu = models.MenuMain
+		c.CurrentMenu = models.MenuMain
 		handleMain(c)
 		return
 	}
@@ -648,48 +739,62 @@ func handleUsersViewALl(c *UserCache) {
 
 	rows, err := db.Query(`
 		SELECT 
-			u.tgid,			
-			u.first_name,
-			u.last_name			
-		FROM users u
+			UDb.tgid,			
+			UDb.first_name,
+			UDb.last_name			
+		FROM 
+			users UDb
 		WHERE
-			u.status=?
+			UDb.status=?
 		ORDER BY
-			u.id;`, models.UserApprowed)
+			UDb.id;`, models.UserApprowed)
 	if err != nil {
-		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select users from db")
+		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can'TDb select users from db")
 		msg.ReplyToMessageID = c.MessageID
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 
 		handleUsersView(c)
 	}
 	defer rows.Close()
 
-	var xs []dbUsers
-	var u dbUsers
+	var xs []models.DbUsers
+	var u models.DbUsers
 
 	for rows.Next() {
-		rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
-		xs = append(xs, u)
+		err := rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
+		if err != nil {
+			log.Println(err)
+		} else {
+			xs = append(xs, u)
+		}
 	}
 
-	reply = fmt.Sprintf("We have <b>%v</b> approved users:", len(xs))
+	reply = fmt.Sprintf("We have <b>%v</b> approved user", len(xs))
 	msg := tgbotapi.NewMessage(c.ChatID, reply)
 	msg.ParseMode = "HTML"
-	bot.Send(msg)
+	_, err = bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 
 	for key, val := range xs {
 		reply = fmt.Sprintf(`#%v <a href="tg://user?id=%v">%v %v</a>`, key+1, val.TelegramID, val.FirstName, val.LastName)
 		msg := tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ParseMode = "HTML"
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
 
-func handleUsersViewRequests(c *UserCache) {
+func handleUsersViewRequests(c *models.UserCache) {
 
 	if c.User.Admin == 0 {
-		c.currentMenu = models.MenuMain
+		c.CurrentMenu = models.MenuMain
 		handleMain(c)
 		return
 	}
@@ -698,46 +803,60 @@ func handleUsersViewRequests(c *UserCache) {
 
 	rows, err := db.Query(`
 		SELECT 
-			u.tgid,
-			u.first_name,
-			u.last_name			
-		FROM users u
+			UDb.tgid,
+			UDb.first_name,
+			UDb.last_name			
+		FROM 
+			users UDb
 		WHERE
-			u.status=?;`, models.UserRequested)
+			UDb.status=?;`, models.UserRequested)
 	if err != nil {
-		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select users for approving from db")
+		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can'TDb select users for approving from db")
 		msg.ReplyToMessageID = c.MessageID
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 
 		handleUsersView(c)
 	}
 	defer rows.Close()
 
-	var xs []dbUsers
-	var u dbUsers
+	var xs []models.DbUsers
+	var u models.DbUsers
 
 	for rows.Next() {
-		rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
-		xs = append(xs, u)
+		err := rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
+		if err != nil {
+			log.Println(err)
+		} else {
+			xs = append(xs, u)
+		}
 	}
 
 	reply = fmt.Sprintf("We have <b>%v</b> users requests:", len(xs))
 	msg := tgbotapi.NewMessage(c.ChatID, reply)
 	msg.ParseMode = "HTML"
-	bot.Send(msg)
+	_, err = bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 
 	for key, val := range xs {
 		reply = fmt.Sprintf(`#%v <a href="tg://user?id=%v">%v %v</a>`, key+1, val.TelegramID, val.FirstName, val.LastName)
 		msg := tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ParseMode = "HTML"
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
 
-func handleUsersViewBanned(c *UserCache) {
+func handleUsersViewBanned(c *models.UserCache) {
 
 	if c.User.Admin == 0 {
-		c.currentMenu = models.MenuMain
+		c.CurrentMenu = models.MenuMain
 		handleMain(c)
 		return
 	}
@@ -746,52 +865,66 @@ func handleUsersViewBanned(c *UserCache) {
 
 	rows, err := db.Query(`
 		SELECT 
-			u.tgid,			
-			u.first_name,
-			u.last_name			
-		FROM users u
+			UDb.tgid,			
+			UDb.first_name,
+			UDb.last_name			
+		FROM 
+			users UDb
 		WHERE
-			u.status=?;`, models.UserBanned)
+			UDb.status=?;`, models.UserBanned)
 	if err != nil {
-		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select banned users from db")
+		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can'TDb select banned users from db")
 		msg.ReplyToMessageID = c.MessageID
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 
 		handleUsersView(c)
 	}
 	defer rows.Close()
 
-	var xs []dbUsers
-	var u dbUsers
+	var xs []models.DbUsers
+	var u models.DbUsers
 
 	for rows.Next() {
-		rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
-		xs = append(xs, u)
+		err := rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
+		if err != nil {
+			log.Println(err)
+		} else {
+			xs = append(xs, u)
+		}
 	}
 
-	reply = fmt.Sprintf("We have <b>%v</b> banned users:", len(xs))
+	reply = fmt.Sprintf("We have <b>%v</b> banned users", len(xs))
 	msg := tgbotapi.NewMessage(c.ChatID, reply)
 	msg.ParseMode = "HTML"
-	bot.Send(msg)
+	_, err = bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 
 	for key, val := range xs {
 		reply = fmt.Sprintf(`#%v <a href="tg://user?id=%v">%v %v</a>`, key+1, val.TelegramID, val.FirstName, val.LastName)
 		msg := tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ParseMode = "HTML"
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
 
-func handleUsersEdit(c *UserCache) {
+func handleUsersEdit(c *models.UserCache) {
 
 	if c.User.Admin == 0 {
-		c.currentMenu = models.MenuMain
+		c.CurrentMenu = models.MenuMain
 		handleMain(c)
 		return
 	}
 
-	c.currentMenu = models.MenuUsersEdit
-	c.editingUserIndx = 0
+	c.CurrentMenu = models.MenuUsersEdit
+	c.UserSlider.EditingUserIndx = 0
 
 	btnRow1 := tgbotapi.NewKeyboardButtonRow(buttons.Back)
 	btnRow2 := tgbotapi.NewKeyboardButtonRow(buttons.Approve, buttons.Ban, buttons.Unban)
@@ -799,26 +932,29 @@ func handleUsersEdit(c *UserCache) {
 	markup := tgbotapi.NewReplyKeyboard(btnRow1, btnRow2)
 	markup.Selective = true
 
-	msg := tgbotapi.NewMessage(c.ChatID, "View users:")
+	msg := tgbotapi.NewMessage(c.ChatID, "View Users")
 	msg.ReplyMarkup = markup
 
-	bot.Send(msg)
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
-func handleUsersEditApprove(c *UserCache) {
+func handleUsersEditApprove(c *models.UserCache) {
 
 	if c.User.Admin == 0 {
-		c.currentMenu = models.MenuMain
+		c.CurrentMenu = models.MenuMain
 		handleMain(c)
 		return
 	}
 
-	c.currentMenu = models.MenuUsersEditApprove
+	c.CurrentMenu = models.MenuUsersEditApprove
 
-	editingUser := c.editingUserIndx
-	users := c.users
+	editingUser := c.UserSlider.EditingUserIndx
+	users := c.UserSlider.Users
 
-	var u dbUsers
+	var u models.DbUsers
 	var msgText string
 
 	doAction := true
@@ -828,44 +964,61 @@ func handleUsersEditApprove(c *UserCache) {
 
 		rows, err := db.Query(`
 			SELECT
-				u.id,
-				u.tgid,
-				u.first_name,
-				u.last_name
+				UDb.id,
+				UDb.tgid,
+				UDb.first_name,
+				UDb.last_name
 			FROM
-				users u
+				users UDb
 			WHERE
-				u.status=?
-				AND u.tgid!=?	 
+				UDb.status=?
+				AND UDb.tgid!=?	 
 			ORDER BY
-				u.id`, models.UserRequested, c.User.TelegramID)
+				UDb.id`, models.UserRequested, c.User.TelegramID)
 		if err != nil {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
+
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while taking approving list :(")
 			msg.ReplyToMessageID = c.MessageID
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 			return
 		}
 		defer rows.Close()
 
-		users = make(map[int]dbUsers)
+		users = make(map[int]models.DbUsers)
 
 		i := 1
 		for rows.Next() {
-			rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName)
-			users[i] = u
-			i++
+			err := rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName)
+			if err != nil {
+				log.Println(err)
+			} else {
+				users[i] = u
+				i++
+			}
 		}
 
 		if len(users) == 0 {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
+
 			msg := tgbotapi.NewMessage(c.ChatID, "I have no users to approve for now")
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			handleUsersEdit(c)
 			return
 		}
 
 		editingUser = 1
-		c.users = users
-		c.editingUserIndx = editingUser
+		c.UserSlider.Users = users
+		c.UserSlider.EditingUserIndx = editingUser
 	}
 
 	if doAction {
@@ -890,9 +1043,16 @@ func handleUsersEditApprove(c *UserCache) {
 				tgid=? 
 			`)
 		if err != nil {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
+
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while approving user :(")
 			msg.ReplyToMessageID = c.MessageID
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			handleUsersEdit(c)
 			return
 		}
@@ -900,9 +1060,15 @@ func handleUsersEditApprove(c *UserCache) {
 		timeNow := time.Now().UTC()
 		_, err = stmt.Exec(models.UserApprowed, timeNow, c.User.TelegramID, u.TelegramID)
 		if err != nil {
+			c.CurrentMenu = models.MenuUsersEdit
+
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while approving user :(")
 			msg.ReplyToMessageID = c.MessageID
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			handleUsersEdit(c)
 			return
 		}
@@ -910,42 +1076,54 @@ func handleUsersEditApprove(c *UserCache) {
 		reply := fmt.Sprintf(`Your account has been <b>approved</b> by <a href="tg://user?id=%v">%v %v</a> at %v`, c.User.TelegramID, c.User.FirstName, c.User.LastName, timeNow)
 		msg := tgbotapi.NewMessage(int64(u.TelegramID), reply)
 		msg.ParseMode = "HTML"
-		bot.Send(msg)
+		_, err = bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 
 		reply = fmt.Sprintf("Account %v %v has been <b>approved</b>", u.FirstName, u.LastName)
 		msg = tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ParseMode = "HTML"
-		bot.Send(msg)
+		_, err = bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 
 		editingUser++
 
 		if editingUser > len(users) {
-			c.editingUserIndx = 0
-			c.currentMenu = models.MenuUsersEdit
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
 
 			msg := tgbotapi.NewMessage(c.ChatID, "No more users to approve. It was last one")
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 
 			handleUsersEdit(c)
 			return
 		}
 
-		c.editingUserIndx = editingUser
+		c.UserSlider.EditingUserIndx = editingUser
 
 	case models.Next:
 		editingUser++
 
 		if editingUser > len(users) {
-			c.editingUserIndx = 0
-			c.currentMenu = models.MenuUsersEdit
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
 
 			msg := tgbotapi.NewMessage(c.ChatID, "No more users to approve. It was last one")
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 
 			handleUsersEdit(c)
 			return
 		}
-		c.editingUserIndx = editingUser
+		c.UserSlider.EditingUserIndx = editingUser
 	}
 
 	u = users[editingUser]
@@ -961,73 +1139,93 @@ func handleUsersEditApprove(c *UserCache) {
 	markup.Selective = true
 	msg.ReplyMarkup = markup
 
-	bot.Send(msg)
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
-func handleUsersEditBan(c *UserCache) {
+func handleUsersEditBan(c *models.UserCache) {
 
 	if c.User.Admin == 0 {
-		c.currentMenu = models.MenuMain
+		c.CurrentMenu = models.MenuMain
 		handleMain(c)
 		return
 	}
 
-	c.currentMenu = models.MenuUsersEditBan
+	c.CurrentMenu = models.MenuUsersEditBan
 
-	cache := c
-	currentUser := cache.editingUserIndx
-	users := cache.users
+	currentUserIndx := c.UserSlider.EditingUserIndx
+	users := c.UserSlider.Users
 
-	var u dbUsers
+	var u models.DbUsers
 	var msgText string
 	var reply string
 
 	doAction := true
 
-	if currentUser == 0 {
+	if currentUserIndx == 0 {
 		doAction = false
 
 		rows, err := db.Query(`
 			SELECT
-				u.id,
-				u.tgid,
-				u.first_name,
-				u.last_name,
-				u.status				
+				UDb.id,
+				UDb.tgid,
+				UDb.first_name,
+				UDb.last_name,
+				UDb.status				
 			FROM
-				users u
+				users UDb
 			WHERE
-				(u.status=? OR u.status=?)
-				AND u.tgid!=?
+				(UDb.status=? OR UDb.status=?)
+				AND UDb.tgid!=?
 			ORDER BY
-				u.id`, models.UserRequested, models.UserApprowed, c.User.TelegramID)
+				UDb.id`, models.UserRequested, models.UserApprowed, c.User.TelegramID)
 		if err != nil {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
+
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while taking users list :(")
 			msg.ReplyToMessageID = c.MessageID
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			return
 		}
 		defer rows.Close()
 
-		users = make(map[int]dbUsers)
+		users = make(map[int]models.DbUsers)
 
 		i := 1
 		for rows.Next() {
-			rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName, &u.Status)
-			users[i] = u
-			i++
+			err := rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName, &u.Status)
+			if err != nil {
+				log.Println(err)
+			} else {
+				users[i] = u
+				i++
+			}
 		}
 
 		if len(users) == 0 {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
+
 			msg := tgbotapi.NewMessage(c.ChatID, "I have no users to ban for now")
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			handleUsersEdit(c)
 			return
 		}
 
-		currentUser = 1
-		c.users = users
-		c.editingUserIndx = currentUser
+		currentUserIndx = 1
+		c.UserSlider.Users = users
+		c.UserSlider.EditingUserIndx = currentUserIndx
 	}
 
 	if doAction {
@@ -1039,7 +1237,7 @@ func handleUsersEditBan(c *UserCache) {
 	switch msgText {
 	case models.Ban:
 
-		u := users[currentUser]
+		u := users[currentUserIndx]
 
 		stmt, err := db.Prepare(`
 			UPDATE
@@ -1052,9 +1250,16 @@ func handleUsersEditBan(c *UserCache) {
 				tgid=? 
 			`)
 		if err != nil {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
+
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while banning user :(")
 			msg.ReplyToMessageID = c.MessageID
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			handleUsersEdit(c)
 			return
 		}
@@ -1062,9 +1267,16 @@ func handleUsersEditBan(c *UserCache) {
 		timeNow := time.Now().UTC()
 		_, err = stmt.Exec(models.UserBanned, timeNow, c.User.TelegramID, u.TelegramID)
 		if err != nil {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
+
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while banning user :(")
 			msg.ReplyToMessageID = c.MessageID
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			handleUsersEdit(c)
 			return
 		}
@@ -1077,45 +1289,57 @@ func handleUsersEditBan(c *UserCache) {
 
 		msg := tgbotapi.NewMessage(int64(u.TelegramID), reply)
 		msg.ParseMode = "HTML"
-		bot.Send(msg)
+		_, err = bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 
 		reply = fmt.Sprintf("Account %v %v has been <b>banned</b>", u.FirstName, u.LastName)
 		msg = tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ParseMode = "HTML"
-		bot.Send(msg)
+		_, err = bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 
-		currentUser++
+		currentUserIndx++
 
-		if currentUser > len(users) {
-			c.editingUserIndx = 0
-			c.currentMenu = models.MenuUsersEdit
+		if currentUserIndx > len(users) {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
 
 			msg := tgbotapi.NewMessage(c.ChatID, "No more users to approve. It was last one")
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 
 			handleUsersEdit(c)
 			return
 		}
 
-		c.editingUserIndx = currentUser
+		c.UserSlider.EditingUserIndx = currentUserIndx
 
 	case models.Next:
-		currentUser++
+		currentUserIndx++
 
-		if currentUser > len(users) {
-			c.editingUserIndx = 0
-			c.currentMenu = models.MenuUsersEdit
+		if currentUserIndx > len(users) {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
 
 			msg := tgbotapi.NewMessage(c.ChatID, "No more users to ban. It was last one")
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 
 			handleUsersEdit(c)
 			return
 		}
-		c.editingUserIndx = currentUser
+		c.UserSlider.EditingUserIndx = currentUserIndx
 	}
 
-	u = users[currentUser]
+	u = users[currentUserIndx]
 
 	reply = fmt.Sprintf(`You moderating: <a href="tg://user?id=%v">%v %v</a>`, u.TelegramID, u.FirstName, u.LastName)
 	msg := tgbotapi.NewMessage(c.ChatID, reply)
@@ -1128,72 +1352,91 @@ func handleUsersEditBan(c *UserCache) {
 	markup.Selective = true
 	msg.ReplyMarkup = markup
 
-	bot.Send(msg)
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
-func handleUsersEditUnban(c *UserCache) {
+func handleUsersEditUnban(c *models.UserCache) {
 
 	if c.User.Admin == 0 {
-		c.currentMenu = models.MenuMain
+		c.CurrentMenu = models.MenuMain
 		handleMain(c)
 		return
 	}
 
-	c.currentMenu = models.MenuUsersEditUnban
+	c.CurrentMenu = models.MenuUsersEditUnban
 
-	cache := c
-	currentUser := cache.editingUserIndx
-	users := cache.users
+	currentUserIndx := c.UserSlider.EditingUserIndx
+	users := c.UserSlider.Users
 
-	var u dbUsers
+	var u models.DbUsers
 	var msgText string
 
 	doAction := true
 
-	if currentUser == 0 {
+	if currentUserIndx == 0 {
 		doAction = false
 
 		rows, err := db.Query(`
 			SELECT
-				u.id,
-				u.tgid,
-				u.username,
-				u.first_name,
-				u.last_name
+				UDb.id,
+				UDb.tgid,
+				UDb.first_name,
+				UDb.last_name
 			FROM
-				users u
+				users UDb
 			WHERE
-				u.status=?
-				AND u.tgid!=?
+				UDb.status=?
+				AND UDb.tgid!=?
 			ORDER BY
-				u.id`, models.UserBanned, c.User.TelegramID)
+				UDb.id`, models.UserBanned, c.User.TelegramID)
 		if err != nil {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
+
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while taking ban list :(")
 			msg.ReplyToMessageID = c.MessageID
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			return
 		}
 		defer rows.Close()
 
-		users = make(map[int]dbUsers)
+		users = make(map[int]models.DbUsers)
 
 		i := 1
 		for rows.Next() {
-			rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName)
-			users[i] = u
-			i++
+			err := rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName)
+			if err != nil {
+				log.Println(err)
+			} else {
+				users[i] = u
+				i++
+			}
 		}
 
 		if len(users) == 0 {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
+
 			msg := tgbotapi.NewMessage(c.ChatID, "I have no users to unban for now")
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			handleUsersEdit(c)
 			return
 		}
 
-		currentUser = 1
-		c.users = users
-		c.editingUserIndx = currentUser
+		currentUserIndx = 1
+		c.UserSlider.Users = users
+		c.UserSlider.EditingUserIndx = currentUserIndx
 	}
 
 	if doAction {
@@ -1205,7 +1448,7 @@ func handleUsersEditUnban(c *UserCache) {
 	switch msgText {
 	case models.Unban:
 
-		u := users[currentUser]
+		u := users[currentUserIndx]
 
 		stmt, err := db.Prepare(`
 			UPDATE
@@ -1218,9 +1461,16 @@ func handleUsersEditUnban(c *UserCache) {
 				tgid=? 
 			`)
 		if err != nil {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
+
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while unbanning user :(")
 			msg.ReplyToMessageID = c.MessageID
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			handleUsersEdit(c)
 			return
 		}
@@ -1228,9 +1478,16 @@ func handleUsersEditUnban(c *UserCache) {
 		timeNow := time.Now().UTC()
 		_, err = stmt.Exec(models.UserApprowed, timeNow, c.User.TelegramID, u.TelegramID)
 		if err != nil {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
+
 			msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while unbanning user :(")
 			msg.ReplyToMessageID = c.MessageID
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			handleUsersEdit(c)
 			return
 		}
@@ -1238,45 +1495,57 @@ func handleUsersEditUnban(c *UserCache) {
 		reply := fmt.Sprintf(`Your account has been <b>unbanned</b> by <a href="tg://user?id=%v">%v %v</a> at %v. Try to text to admin`, c.User.TelegramID, c.User.FirstName, c.User.LastName, timeNow)
 		msg := tgbotapi.NewMessage(int64(u.TelegramID), reply)
 		msg.ParseMode = "HTML"
-		bot.Send(msg)
+		_, err = bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 
 		reply = fmt.Sprintf("Account %v %v has been <b>unbanned</b>", u.FirstName, u.LastName)
 		msg = tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ParseMode = "HTML"
-		bot.Send(msg)
+		_, err = bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 
-		currentUser++
+		currentUserIndx++
 
-		if currentUser > len(users) {
-			c.editingUserIndx = 0
-			c.currentMenu = models.MenuUsersEdit
+		if currentUserIndx > len(users) {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
 
 			msg := tgbotapi.NewMessage(c.ChatID, "No more users to unban. It was last one")
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 
 			handleUsersEdit(c)
 			return
 		}
 
-		c.editingUserIndx = currentUser
+		c.UserSlider.EditingUserIndx = currentUserIndx
 
 	case models.Next:
-		currentUser++
+		currentUserIndx++
 
-		if currentUser > len(users) {
-			c.editingUserIndx = 0
-			c.currentMenu = models.MenuUsersEdit
+		if currentUserIndx > len(users) {
+			c.UserSlider.EditingUserIndx = 0
+			c.CurrentMenu = models.MenuUsersEdit
 
 			msg := tgbotapi.NewMessage(c.ChatID, "No more users to unban. It was last one")
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 
 			handleUsersEdit(c)
 			return
 		}
-		c.editingUserIndx = currentUser
+		c.UserSlider.EditingUserIndx = currentUserIndx
 	}
 
-	u = users[currentUser]
+	u = users[currentUserIndx]
 
 	reply := fmt.Sprintf(`You moderating: <a href="tg://user?id=%v">%v %v</a>`, u.TelegramID, u.FirstName, u.LastName)
 	msg := tgbotapi.NewMessage(c.ChatID, reply)
@@ -1289,29 +1558,16 @@ func handleUsersEditUnban(c *UserCache) {
 	markup.Selective = true
 	msg.ReplyMarkup = markup
 
-	bot.Send(msg)
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
-//func handleTasks(c *UserCache) {
-//
-//	c.currentMenu = models.MenuToMe
-//	c.editingUserIndx = 0
-//	c.NewTask = nil
-//
-//	row1 := tgbotapi.NewKeyboardButtonRow(buttons.Back)
-//	row2 := tgbotapi.NewKeyboardButtonRow(buttons.View, buttons.New)
-//	markup := tgbotapi.NewReplyKeyboard(row1, row2)
-//
-//	msg := tgbotapi.NewMessage(c.ChatID, "Inbox:")
-//	msg.ReplyMarkup = markup
-//	bot.Send(msg)
-//
-//}
+func handleInbox(c *models.UserCache) {
 
-func handleInbox(c *UserCache) {
-
-	c.currentMenu = models.MenuInbox
-	c.editingUserIndx = 0
+	c.CurrentMenu = models.MenuInbox
+	c.UserSlider.EditingUserIndx = 0
 	c.NewTask = nil
 
 	row1 := tgbotapi.NewKeyboardButtonRow(buttons.Back)
@@ -1321,31 +1577,36 @@ func handleInbox(c *UserCache) {
 
 	msg := tgbotapi.NewMessage(c.ChatID, "Menu: Inbox")
 	msg.ReplyMarkup = markup
-	bot.Send(msg)
-
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
-func backToInbox(c *UserCache) {
-	c.editingTaskIndx = 0
-	c.currentMenu = models.MenuInbox
-	c.tasks = nil
+func backToInbox(c *models.UserCache) {
+	c.TaskSlider.EditingTaskIndx = 0
+	c.CurrentMenu = models.MenuInbox
+	c.TaskSlider.Tasks = nil
 
 	//видалимо повідомлення із слайдера
-	if c.currentMessage != 0 {
-		bot.DeleteMessage(tgbotapi.DeleteMessageConfig{
+	if c.CurrentMessage != 0 {
+		_, err := bot.DeleteMessage(tgbotapi.DeleteMessageConfig{
 			ChatID:    c.ChatID,
-			MessageID: c.currentMessage,
+			MessageID: c.CurrentMessage,
 		})
-		c.currentMessage = 0
+		if err != nil {
+			log.Println(err)
+		}
+		c.CurrentMessage = 0
 	}
 
 	handleInbox(c)
 }
 
-func handleSent(c *UserCache) {
+func handleSent(c *models.UserCache) {
 
-	c.currentMenu = models.MenuSent
-	c.editingUserIndx = 0
+	c.CurrentMenu = models.MenuSent
+	c.UserSlider.EditingUserIndx = 0
 	c.NewTask = nil
 
 	row1 := tgbotapi.NewKeyboardButtonRow(buttons.Back)
@@ -1355,35 +1616,41 @@ func handleSent(c *UserCache) {
 
 	msg := tgbotapi.NewMessage(c.ChatID, "Menu: Sent")
 	msg.ReplyMarkup = markup
-	bot.Send(msg)
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 
 }
 
-func backToSent(c *UserCache) {
-	c.editingTaskIndx = 0
-	c.currentMenu = models.MenuSent
-	c.tasks = nil
+func backToSent(c *models.UserCache) {
+	c.TaskSlider.EditingTaskIndx = 0
+	c.CurrentMenu = models.MenuSent
+	c.TaskSlider.Tasks = nil
 
 	//видалимо повідомлення із слайдера
-	if c.currentMessage != 0 {
-		bot.DeleteMessage(tgbotapi.DeleteMessageConfig{
+	if c.CurrentMessage != 0 {
+		_, err := bot.DeleteMessage(tgbotapi.DeleteMessageConfig{
 			ChatID:    c.ChatID,
-			MessageID: c.currentMessage,
+			MessageID: c.CurrentMessage,
 		})
-		c.currentMessage = 0
+		if err != nil {
+			log.Println(err)
+		}
+		c.CurrentMessage = 0
 	}
 
 	handleSent(c)
 }
 
-func handleInboxTasks(c *UserCache, menu string, status string) {
+func handleInboxTasks(c *models.UserCache, menu string, status string) {
 
-	c.currentMenu = menu
+	c.CurrentMenu = menu
 
-	editingTask := c.editingTaskIndx
-	tasks := c.tasks
+	editingTask := c.TaskSlider.EditingTaskIndx
+	tasks := c.TaskSlider.Tasks
 
-	var t dbTasks
+	var t models.DbTasks
 	var msgText string
 
 	doAction := true
@@ -1393,21 +1660,24 @@ func handleInboxTasks(c *UserCache, menu string, status string) {
 
 		rows, err := db.Query(`
 		SELECT
-			t.ID,
-			t.title,
-			t.description,
-			t.changed_at			
-		FROM tasks t
+			TDb.ID,
+			TDb.title,
+			TDb.description,
+			TDb.changed_at			
+		FROM tasks TDb
 		WHERE
-			t.to_user=?
-			AND t.status=?
+			TDb.to_user=?
+			AND TDb.status=?
 		ORDER BY
-			t.id`, c.User.TelegramID, status)
+			TDb.id`, c.User.TelegramID, status)
 		if err != nil {
 			reply := fmt.Sprintf("Something went wrong while selecting %v tasks", status)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 
 			c.Text = ""
 			handleInbox(c)
@@ -1415,38 +1685,48 @@ func handleInboxTasks(c *UserCache, menu string, status string) {
 		}
 		defer rows.Close()
 
-		tasks = make(map[int]dbTasks)
+		tasks = make(map[int]models.DbTasks)
 
 		i := 1
 		for rows.Next() {
-			rows.Scan(&t.ID, &t.Title, &t.Description, &t.ChangedAt)
-
-			tasks[i] = t
-			i++
+			err := rows.Scan(&t.ID, &t.Title, &t.Description, &t.ChangedAt)
+			if err != nil {
+				log.Println(err)
+			} else {
+				tasks[i] = t
+				i++
+			}
 		}
 
 		if len(tasks) == 0 {
 			reply := fmt.Sprintf("I have no %v tasks", status)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			handleInbox(c)
 			return
 		}
 
-		c.tasks = tasks
-		c.editingTaskIndx = 1
+		c.TaskSlider.Tasks = tasks
+		c.TaskSlider.EditingTaskIndx = 1
 	}
 
 	if doAction {
 		msgText = c.Text
 	} else {
 		msgText = ""
-		c.TaskID = tasks[c.editingTaskIndx].ID
+		c.TaskID = tasks[c.TaskSlider.EditingTaskIndx].ID
 
 		reply := fmt.Sprintf("Menu Inbox->%v:", status)
 		msg := tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(tgbotapi.NewKeyboardButtonRow(buttons.Inbox))
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 
 		showTask(c)
 		return
@@ -1460,13 +1740,16 @@ func handleInboxTasks(c *UserCache, menu string, status string) {
 		if editingTask > len(tasks) {
 			reply := fmt.Sprintf("No more %v tasks. It was last one", status)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 
 			backToInbox(c)
 			return
 		}
 
-		c.editingTaskIndx = editingTask
+		c.TaskSlider.EditingTaskIndx = editingTask
 		c.TaskID = tasks[editingTask].ID
 
 		showTask(c)
@@ -1476,13 +1759,16 @@ func handleInboxTasks(c *UserCache, menu string, status string) {
 		if editingTask == 0 {
 			reply := fmt.Sprintf("No more %v tasks. It was first one", status)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 
 			backToInbox(c)
 			return
 		}
 
-		c.editingTaskIndx = editingTask
+		c.TaskSlider.EditingTaskIndx = editingTask
 		c.TaskID = tasks[editingTask].ID
 
 		showTask(c)
@@ -1492,17 +1778,20 @@ func handleInboxTasks(c *UserCache, menu string, status string) {
 	case models.Inbox:
 		backToInbox(c)
 		return
+	default:
+		backToInbox(c)
+		return
 	}
 }
 
-func handleSentTasks(c *UserCache, menu string, status string) {
+func handleSentTasks(c *models.UserCache, menu string, status string) {
 
-	c.currentMenu = menu
+	c.CurrentMenu = menu
 
-	editingTask := c.editingTaskIndx
-	tasks := c.tasks
+	editingTask := c.TaskSlider.EditingTaskIndx
+	tasks := c.TaskSlider.Tasks
 
-	var t dbTasks
+	var t models.DbTasks
 	var msgText string
 
 	doAction := true
@@ -1512,21 +1801,24 @@ func handleSentTasks(c *UserCache, menu string, status string) {
 
 		rows, err := db.Query(`
 		SELECT
-			t.ID,
-			t.title,
-			t.description,
-			t.changed_at			
-		FROM tasks t
+			TDb.ID,
+			TDb.title,
+			TDb.description,
+			TDb.changed_at			
+		FROM tasks TDb
 		WHERE
-			t.from_user=?
-			AND t.status=?
+			TDb.from_user=?
+			AND TDb.status=?
 		ORDER BY
-			t.id`, c.User.TelegramID, status)
+			TDb.id`, c.User.TelegramID, status)
 		if err != nil {
 			reply := fmt.Sprintf("Something went wrong while selecting %v tasks", status)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 
 			c.Text = ""
 			handleSent(c)
@@ -1534,38 +1826,48 @@ func handleSentTasks(c *UserCache, menu string, status string) {
 		}
 		defer rows.Close()
 
-		tasks = make(map[int]dbTasks)
+		tasks = make(map[int]models.DbTasks)
 
 		i := 1
 		for rows.Next() {
-			rows.Scan(&t.ID, &t.Title, &t.Description, &t.ChangedAt)
-
-			tasks[i] = t
-			i++
+			err := rows.Scan(&t.ID, &t.Title, &t.Description, &t.ChangedAt)
+			if err != nil {
+				log.Println(err)
+			} else {
+				tasks[i] = t
+				i++
+			}
 		}
 
 		if len(tasks) == 0 {
 			reply := fmt.Sprintf("I have no %v tasks", status)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			handleSent(c)
 			return
 		}
 
-		c.tasks = tasks
-		c.editingTaskIndx = 1
+		c.TaskSlider.Tasks = tasks
+		c.TaskSlider.EditingTaskIndx = 1
 	}
 
 	if doAction {
 		msgText = c.Text
 	} else {
 		msgText = ""
-		c.TaskID = tasks[c.editingTaskIndx].ID
+		c.TaskID = tasks[c.TaskSlider.EditingTaskIndx].ID
 
 		reply := fmt.Sprintf("Menu Sent->%v:", status)
 		msg := tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(tgbotapi.NewKeyboardButtonRow(buttons.Sent))
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 
 		showTask(c)
 		return
@@ -1579,13 +1881,16 @@ func handleSentTasks(c *UserCache, menu string, status string) {
 		if editingTask > len(tasks) {
 			reply := fmt.Sprintf("No more %v tasks. It was last one", status)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 
 			backToSent(c)
 			return
 		}
 
-		c.editingTaskIndx = editingTask
+		c.TaskSlider.EditingTaskIndx = editingTask
 		c.TaskID = tasks[editingTask].ID
 
 		showTask(c)
@@ -1595,13 +1900,16 @@ func handleSentTasks(c *UserCache, menu string, status string) {
 		if editingTask == 0 {
 			reply := fmt.Sprintf("No more %v tasks. It was first one", status)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 
 			backToSent(c)
 			return
 		}
 
-		c.editingTaskIndx = editingTask
+		c.TaskSlider.EditingTaskIndx = editingTask
 		c.TaskID = tasks[editingTask].ID
 
 		showTask(c)
@@ -1614,58 +1922,66 @@ func handleSentTasks(c *UserCache, menu string, status string) {
 	}
 }
 
-func handleNew(c *UserCache) {
+func handleNew(c *models.UserCache) {
 
-	c.currentMenu = models.MenuNew
-	c.editingUserIndx = 0
+	c.CurrentMenu = models.MenuNew
+	c.UserSlider.EditingUserIndx = 0
 
 	if c.NewTask == nil {
-		c.NewTask = &task{}
+		c.NewTask = &models.Task{}
 	}
 
 	switch c.NewTask.Step {
 	case models.NewTaskStepUser:
 		switch c.Text {
 		case models.Cancel:
-			c.NewTask = &task{}
-			c.currentMenu = models.MenuMain
+			c.NewTask = &models.Task{}
+			c.CurrentMenu = models.MenuMain
 			handleMain(c)
 			return
 		case models.New, "":
 			rows, err := db.Query(`
 			SELECT 
-				u.tgid,
-				u.first_name,
-				u.last_name
-			FROM users u
+				UDb.tgid,
+				UDb.first_name,
+				UDb.last_name
+			FROM 
+				users UDb
 			WHERE
-				u.status=?`, models.UserApprowed)
+				UDb.status=?`, models.UserApprowed)
 			if err != nil {
-				c.currentMenu = models.MenuMain
-				c.editingUserIndx = 0
+				c.CurrentMenu = models.MenuMain
+				c.UserSlider.EditingUserIndx = 0
 				c.NewTask = nil
 
-				reply := "Something went wrong while selecting users. Can't start new task"
+				reply := "Something went wrong while selecting user can'TDb start new Task"
 				msg := tgbotapi.NewMessage(c.ChatID, reply)
 				msg.ReplyToMessageID = c.MessageID
-				bot.Send(msg)
+				_, err := bot.Send(msg)
+				if err != nil {
+					log.Println(err)
+				}
+
 				handleMain(c)
 				return
 			}
 			defer rows.Close()
 
-			var u dbUsers
-			var users = make(map[int]dbUsers)
+			var u models.DbUsers
+			var users = make(map[int]models.DbUsers)
 
 			i := 1
 			for rows.Next() {
-				rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
-
-				users[i] = u
-				i++
+				err := rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
+				if err != nil {
+					log.Println(err)
+				} else {
+					users[i] = u
+					i++
+				}
 			}
 
-			c.users = users
+			c.UserSlider.Users = users
 
 			var btnRow []tgbotapi.KeyboardButton
 			var keyboard [][]tgbotapi.KeyboardButton
@@ -1685,7 +2001,7 @@ func handleNew(c *UserCache) {
 
 			if len(btnRow) > 0 {
 				keyboard = append(keyboard, btnRow)
-				btnRow = nil
+				//btnRow = nil
 			}
 
 			markup := tgbotapi.NewReplyKeyboard(keyboard[:]...)
@@ -1694,7 +2010,10 @@ func handleNew(c *UserCache) {
 			reply := "Choose user:"
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ReplyMarkup = markup
-			bot.Send(msg)
+			_, err = bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 			return
 		default:
 			xs := strings.Split(c.Text, " | ")
@@ -1709,7 +2028,7 @@ func handleNew(c *UserCache) {
 				return
 			}
 
-			users := c.users
+			users := c.UserSlider.Users
 
 			if _, ok := users[toUserIndx]; !ok {
 				fmt.Println("1")
@@ -1724,25 +2043,28 @@ func handleNew(c *UserCache) {
 			markup := tgbotapi.NewReplyKeyboard(row1)
 			markup.Selective = true
 
-			reply := fmt.Sprintf(`<b>New task</b>
+			reply := fmt.Sprintf(`<b>New Task</b>
 			To user: <a href="tg://user?id=%v">%v %v</a>
 			
-			Enter task title <i>(then press Enter)</i>:`, toUser.TelegramID, toUser.FirstName, toUser.LastName)
+			Enter Task title <i>(then press Enter)</i>:`, toUser.TelegramID, toUser.FirstName, toUser.LastName)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
 			msg.ReplyMarkup = markup
-			bot.Send(msg)
+			_, err = bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 			return
 		}
 	case models.NewTaskStepTitle:
 		switch c.Text {
 		case models.Cancel:
-			c.NewTask = &task{}
-			c.currentMenu = models.MenuMain
+			c.NewTask = &models.Task{}
+			c.CurrentMenu = models.MenuMain
 			handleMain(c)
 			return
 		case models.Back:
-			c.NewTask.ToUser = &dbUsers{}
+			c.NewTask.ToUser = &models.DbUsers{}
 			c.NewTask.Step = models.NewTaskStepUser
 
 			c.Text = ""
@@ -1755,14 +2077,18 @@ func handleNew(c *UserCache) {
 			markup := tgbotapi.NewReplyKeyboard(row1)
 			markup.Selective = true
 
-			reply := fmt.Sprintf(`<b>New task</b>
+			reply := fmt.Sprintf(`<b>New Task</b>
 			To user: <a href="tg://user?id=%v">%v %v</a>
 			
-			Enter task title <i>(then press Enter)</i>:`, toUser.TelegramID, toUser.FirstName, toUser.LastName)
+			Enter Task title <i>(then press Enter)</i>:`, toUser.TelegramID, toUser.FirstName, toUser.LastName)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
 			msg.ReplyMarkup = markup
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			return
 		default:
 			c.NewTask.Title = c.Text
@@ -1774,23 +2100,26 @@ func handleNew(c *UserCache) {
 			markup := tgbotapi.NewReplyKeyboard(row1)
 			markup.Selective = true
 
-			reply := fmt.Sprintf(`<b>New task</b>
+			reply := fmt.Sprintf(`<b>New Task</b>
 			To user: <a href="tg://user?id=%v">%v %v</a>
 			Title: %v
 			
-			Enter task description:`, toUser.TelegramID, toUser.FirstName, toUser.LastName, c.Text)
+			Enter Task description:`, toUser.TelegramID, toUser.FirstName, toUser.LastName, c.Text)
 
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
 			msg.ReplyMarkup = markup
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 			return
 		}
 	case models.NewTaskStepDescription:
 		switch c.Text {
 		case models.Cancel:
-			c.NewTask = &task{}
-			c.currentMenu = models.MenuMain
+			c.NewTask = &models.Task{}
+			c.CurrentMenu = models.MenuMain
 			handleMain(c)
 			return
 		case models.Back:
@@ -1807,16 +2136,20 @@ func handleNew(c *UserCache) {
 			markup := tgbotapi.NewReplyKeyboard(row1)
 			markup.Selective = true
 
-			reply := fmt.Sprintf(`<b>New task</b>
+			reply := fmt.Sprintf(`<b>New Task</b>
 			To user: <a href="tg://user?id=%v">%v %v</a>
 			Title: %v
 			
-			Enter task description:`, toUser.TelegramID, toUser.FirstName, toUser.LastName, c.NewTask.Title)
+			Enter Task description:`, toUser.TelegramID, toUser.FirstName, toUser.LastName, c.NewTask.Title)
 
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
 			msg.ReplyMarkup = markup
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+
 			return
 		default:
 			c.NewTask.Description = c.Text
@@ -1827,21 +2160,24 @@ func handleNew(c *UserCache) {
 			markup := tgbotapi.NewReplyKeyboard(row1)
 			markup.Selective = true
 
-			reply := fmt.Sprintf(`<b>New task</b>
+			reply := fmt.Sprintf(`<b>New Task</b>
 			To user: <a href="tg://user?id=%v">%v %v</a>
 			Title: %v
 			Description: %v`, toUser.TelegramID, toUser.FirstName, toUser.LastName, c.NewTask.Title, c.Text)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
 			msg.ReplyMarkup = markup
-			bot.Send(msg)
+			_, err := bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 			return
 		}
 	case models.NewTaskStepSaveToDB:
 		switch c.Text {
 		case models.Cancel:
-			c.NewTask = &task{}
-			c.currentMenu = models.MenuMain
+			c.NewTask = &models.Task{}
+			c.CurrentMenu = models.MenuMain
 			handleMain(c)
 			return
 		case models.Back:
@@ -1859,8 +2195,13 @@ func handleNew(c *UserCache) {
 			stmt, err := db.Prepare(`
 				INSERT INTO 'tasks'(from_user, to_user, status, changed_at, changed_by, title, description) VALUES(?,?,?,?,?,?,?) `)
 			if err != nil {
-				msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while saving task")
-				bot.Send(msg)
+				c.NewTask.Step = models.NewTaskStepUser
+
+				msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while saving Task")
+				_, err := bot.Send(msg)
+				if err != nil {
+					log.Println(err)
+				}
 
 				handleMain(c)
 				return
@@ -1868,8 +2209,13 @@ func handleNew(c *UserCache) {
 
 			res, err := stmt.Exec(c.User.TelegramID, toUser.TelegramID, models.TaskStatusNew, createdAt, c.User.TelegramID, c.NewTask.Title, c.NewTask.Description)
 			if err != nil {
-				msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while saving task")
-				bot.Send(msg)
+				c.NewTask.Step = models.NewTaskStepUser
+
+				msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while saving Task")
+				_, err := bot.Send(msg)
+				if err != nil {
+					log.Println(err)
+				}
 
 				handleMain(c)
 				return
@@ -1877,8 +2223,13 @@ func handleNew(c *UserCache) {
 
 			taskID, err := res.LastInsertId()
 			if err != nil {
-				msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while saving task")
-				bot.Send(msg)
+				c.NewTask.Step = models.NewTaskStepUser
+
+				msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while saving Task")
+				_, err := bot.Send(msg)
+				if err != nil {
+					log.Println(err)
+				}
 
 				handleMain(c)
 				return
@@ -1891,10 +2242,13 @@ func handleNew(c *UserCache) {
 
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
 			msg.ParseMode = "HTML"
-			bot.Send(msg)
+			_, err = bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
 
 			if c.User.TelegramID != toUser.TelegramID {
-				reply = fmt.Sprintf(`<b>You have new task #%v</b>				
+				reply = fmt.Sprintf(`<b>You have new Task #%v</b>				
 				Title: %v
 				Description: %v
 
@@ -1908,8 +2262,8 @@ func handleNew(c *UserCache) {
 				}
 			}
 
-			c.NewTask = &task{}
-			c.currentMenu = models.MenuMain
+			c.NewTask = &models.Task{}
+			c.CurrentMenu = models.MenuMain
 
 			handleMain(c)
 			return
@@ -1922,28 +2276,58 @@ func handleNew(c *UserCache) {
 	}
 }
 
-func handleComment(c *UserCache) {
+func handleComment(c *models.UserCache) {
+
+	if c.Text == "" {
+		c.CurrentMenu = ""
+
+		msg := tgbotapi.NewMessage(c.ChatID, "I don't see any sense to add an empty comment, sorry.:(")
+		msg.ChatID = c.ChatID
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
+
+		handleMain(c)
+		return
+	}
+
+	if c.TaskID == 0 {
+		c.CurrentMenu = ""
+		handleMain(c)
+		return
+	}
 
 	stmt, err := db.Prepare(`
 		UPDATE 
 			tasks
 		SET
-			comments=?
+			comment=?,
+			commented_at=?,
+			commented_by=?
 		WHERE
 			id=?;`)
 	if err != nil {
-		msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while updating task user :(")
+		msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while updating Task comment:(")
 		msg.ReplyToMessageID = c.MessageID
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
+
 		handleUsersEdit(c)
 		return
 	}
 
-	_, err = stmt.Exec(c.Text, c.TaskID)
+	_, err = stmt.Exec(c.Text, time.Now(), c.User.TelegramID, c.TaskID)
 	if err != nil {
-		msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while updating task user :(")
+		msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while updating Task comment :(")
 		msg.ReplyToMessageID = c.MessageID
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
+
 		handleUsersEdit(c)
 		return
 	}
@@ -1951,19 +2335,20 @@ func handleComment(c *UserCache) {
 	handleMain(c)
 }
 
-func getUserByTelegramID(userid int) dbUsers {
+func getUserByTelegramID(userid int) models.DbUsers {
 
-	var u dbUsers
+	var u models.DbUsers
 
 	rows, err := db.Query(`
 		SELECT
-			u.id,
-			u.tgid,			
-			u.first_name,
-			u.last_name,
-			u.admin,
-			u.status			
-		FROM users u
+			UDb.id,
+			UDb.tgid,			
+			UDb.first_name,
+			UDb.last_name,
+			UDb.admin,
+			UDb.status			
+		FROM 
+			users UDb
 		WHERE
 			tgid=?`, userid)
 	if err != nil {
@@ -1972,13 +2357,16 @@ func getUserByTelegramID(userid int) dbUsers {
 	defer rows.Close()
 
 	if rows.Next() {
-		rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName, &u.Admin, &u.Status)
+		err := rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName, &u.Admin, &u.Status)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 
 	return u
 }
 
-func handleCallbackQuery(c *UserCache) {
+func handleCallbackQuery(c *models.UserCache) {
 
 	var err error
 
@@ -2010,7 +2398,7 @@ func handleCallbackQuery(c *UserCache) {
 			if err != nil {
 				return
 			}
-			changeStatus(c, actionStatus[do])
+			changeStatus(c, do)
 		}
 	case models.Complete:
 		if len(xs) == 2 {
@@ -2018,7 +2406,7 @@ func handleCallbackQuery(c *UserCache) {
 			if err != nil {
 				return
 			}
-			changeStatus(c, actionStatus[do])
+			changeStatus(c, do)
 		}
 	case models.Reject:
 		if len(xs) == 2 {
@@ -2026,7 +2414,7 @@ func handleCallbackQuery(c *UserCache) {
 			if err != nil {
 				return
 			}
-			changeStatus(c, actionStatus[do])
+			changeStatus(c, do)
 		}
 	case models.Close:
 		if len(xs) == 2 {
@@ -2034,7 +2422,7 @@ func handleCallbackQuery(c *UserCache) {
 			if err != nil {
 				return
 			}
-			changeStatus(c, actionStatus[do])
+			changeStatus(c, do)
 		}
 	case models.History:
 		if len(xs) == 2 {
@@ -2054,7 +2442,7 @@ func handleCallbackQuery(c *UserCache) {
 		}
 	case models.Previous:
 		c.Text = models.Previous
-		switch c.currentMenu {
+		switch c.CurrentMenu {
 		case models.MenuInboxNew:
 			handleInboxTasks(c, models.MenuInboxNew, models.TaskStatusNew)
 		case models.MenuInboxStarted:
@@ -2076,24 +2464,27 @@ func handleCallbackQuery(c *UserCache) {
 		case models.MenuSentClosed:
 			handleSentTasks(c, models.MenuSentClosed, models.TaskStatusClosed)
 		default:
-			c.editingTaskIndx = 0
-			c.currentMenu = models.MenuMain
-			c.tasks = nil
+			c.TaskSlider.EditingTaskIndx = 0
+			c.CurrentMenu = models.MenuMain
+			c.TaskSlider.Tasks = nil
 
 			//видалимо повідомлення із слайдера
-			if c.currentMessage != 0 {
-				bot.DeleteMessage(tgbotapi.DeleteMessageConfig{
+			if c.CurrentMessage != 0 {
+				_, err := bot.DeleteMessage(tgbotapi.DeleteMessageConfig{
 					ChatID:    c.ChatID,
-					MessageID: c.currentMessage,
+					MessageID: c.CurrentMessage,
 				})
-				c.currentMessage = 0
+				if err != nil {
+					log.Println(err)
+				}
+				c.CurrentMessage = 0
 			}
 
 			handleMain(c)
 		}
 	case models.Next:
 		c.Text = models.Next
-		switch c.currentMenu {
+		switch c.CurrentMenu {
 		case models.MenuInboxNew:
 			handleInboxTasks(c, models.MenuInboxNew, models.TaskStatusNew)
 		case models.MenuInboxStarted:
@@ -2115,17 +2506,20 @@ func handleCallbackQuery(c *UserCache) {
 		case models.MenuSentClosed:
 			handleSentTasks(c, models.MenuSentClosed, models.TaskStatusClosed)
 		default:
-			c.editingTaskIndx = 0
-			c.currentMenu = models.MenuMain
-			c.tasks = nil
+			c.TaskSlider.EditingTaskIndx = 0
+			c.CurrentMenu = models.MenuMain
+			c.TaskSlider.Tasks = nil
 
 			//видалимо повідомлення із слайдера
-			if c.currentMessage != 0 {
-				bot.DeleteMessage(tgbotapi.DeleteMessageConfig{
+			if c.CurrentMessage != 0 {
+				_, err := bot.DeleteMessage(tgbotapi.DeleteMessageConfig{
 					ChatID:    c.ChatID,
-					MessageID: c.currentMessage,
+					MessageID: c.CurrentMessage,
 				})
-				c.currentMessage = 0
+				if err != nil {
+					log.Println(err)
+				}
+				c.CurrentMessage = 0
 			}
 
 			handleMain(c)
@@ -2133,7 +2527,7 @@ func handleCallbackQuery(c *UserCache) {
 	}
 }
 
-func newUserCancel(c *UserCache) {
+func newUserCancel(c *models.UserCache) {
 
 	var cbConfig tgbotapi.CallbackConfig
 
@@ -2141,14 +2535,20 @@ func newUserCancel(c *UserCache) {
 	cbConfig.ShowAlert = true
 	cbConfig.Text = "You canceled activation"
 
-	bot.AnswerCallbackQuery(cbConfig)
+	_, err := bot.AnswerCallbackQuery(cbConfig)
+	if err != nil {
+		log.Println(err)
+	}
 
 	reply := fmt.Sprintf("Dear, %s %s. See you next time\nBye!", c.User.FirstName, c.User.LastName)
 	updMsg := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, reply)
-	bot.Send(updMsg)
+	_, err = bot.Send(updMsg)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
-func newUserAdd(c *UserCache) {
+func newUserAdd(c *models.UserCache) {
 
 	var cbConfig tgbotapi.CallbackConfig
 
@@ -2156,59 +2556,82 @@ func newUserAdd(c *UserCache) {
 
 	rows, err := db.Query(`
 		SELECT 
-			u.id
-		FROM users u
+			UDb.id
+		FROM 
+			users UDb
 		WHERE
-			u.tgid=?`, c.User.TelegramID)
+			UDb.tgid=?`, c.User.TelegramID)
 	if err != nil {
 		cbConfig.Text = fmt.Sprintf("Dear, %s %s. sorry, somethings went wrong. Try make request later", c.User.FirstName, c.User.LastName)
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	if rows.Next() {
 		cbConfig.Text = "You have already made request"
 		cbConfig.ShowAlert = true
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 
 		updMsg := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, "Keep calm and wait for approval message")
-		bot.Send(updMsg)
+		_, err = bot.Send(updMsg)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 	rows.Close()
 
-	stmt, err := db.Prepare(`INSERT INTO users(tgid, first_name, last_name, status, changed_by, changed_at) values(?, ?, ?, ?, ?, ?)`)
+	stmt, err := db.Prepare(`INSERT INTO users (tgid, first_name, last_name, status, changed_by, changed_at) values(?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		cbConfig.Text = fmt.Sprintf("Dear, %s %s. sorry, somethings went wrong. Try make request later", c.User.FirstName, c.User.LastName)
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	res, err := stmt.Exec(c.User.TelegramID, c.User.FirstName, c.User.LastName, models.UserRequested, c.User.TelegramID, time.Now().UTC())
 	if err != nil {
 		cbConfig.Text = fmt.Sprintf("Dear, %s %s. sorry, somethings went wrong. Try make request later", c.User.FirstName, c.User.LastName)
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	_, err = res.LastInsertId()
 	if err != nil {
 		cbConfig.Text = fmt.Sprintf("Dear, %s %s. sorry, somethings went wrong. Try make request later", c.User.FirstName, c.User.LastName)
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	cbConfig.Text = ""
-	bot.AnswerCallbackQuery(cbConfig)
+	_, err = bot.AnswerCallbackQuery(cbConfig)
+	if err != nil {
+		log.Println(err)
+	}
 
 	var reply string
 
 	rows, err = db.Query(`
 		SELECT
-			u.tgid
-		FROM users u
+			UDb.tgid
+		FROM 
+			users UDb
 		WHERE
-			u.admin=1`)
+			UDb.admin=1`)
 	if err != nil {
 		reply = fmt.Sprintf("Dear, %s %s. Ok, wait for approval message!", c.User.FirstName, c.User.LastName)
 	} else {
@@ -2216,9 +2639,12 @@ func newUserAdd(c *UserCache) {
 	}
 	defer rows.Close()
 
-	var u dbUsers
+	var u models.DbUsers
 	for rows.Next() {
-		rows.Scan(&u.TelegramID)
+		err := rows.Scan(&u.TelegramID)
+		if err != nil {
+			log.Println(err)
+		}
 
 		btnAccept := tgbotapi.NewInlineKeyboardButtonData("Accept", fmt.Sprintf("%v|%v", models.NewUserAccept, c.User.TelegramID))
 		btnDecline := tgbotapi.NewInlineKeyboardButtonData("Decline", fmt.Sprintf("%v|%v", models.NewUserDecline, c.User.TelegramID))
@@ -2229,44 +2655,62 @@ func newUserAdd(c *UserCache) {
 		msg := tgbotapi.NewMessage(int64(u.TelegramID), text)
 		msg.ParseMode = "HTML"
 		msg.ReplyMarkup = markup
-		bot.Send(msg)
+		_, err = bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 
 	updMsg := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, reply)
-	bot.Send(updMsg)
+	_, err = bot.Send(updMsg)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
-func newUserDecline(c *UserCache, ID string) {
+func newUserDecline(c *models.UserCache, ID string) {
 
 	var cbConfig tgbotapi.CallbackConfig
 
 	userID, err := strconv.Atoi(ID)
 	if err != nil {
 		msg := tgbotapi.NewMessage(c.ChatID, "Sorry, something went wrong")
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
+
 		return
 	}
 
 	rows, err := db.Query(`
 		SELECT 
-			u.tgid,
-			u.first_name,
-			u.last_name,
-			u.status,
-			u.changed_at
-		FROM users u
+			UDb.tgid,
+			UDb.first_name,
+			UDb.last_name,
+			UDb.status,
+			UDb.changed_at
+		FROM 
+			users UDb
 		WHERE
-			u.tgid=?`, userID)
+			UDb.tgid=?`, userID)
 	if err != nil {
 		msg := tgbotapi.NewMessage(c.ChatID, "Sorry, something went wrong")
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
+
 		return
 	}
 	defer rows.Close()
 
-	var u dbUsers
+	var u models.DbUsers
 	if rows.Next() {
-		rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName, &u.Status, &u.ChangedAt)
+		err := rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName, &u.Status, &u.ChangedAt)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 
 	if u.Status != models.UserRequested {
@@ -2276,11 +2720,17 @@ func newUserDecline(c *UserCache, ID string) {
 
 		msg := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, reply)
 		msg.ParseMode = "HTML"
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 
 		cbConfig.CallbackQueryID = c.CallbackID
 		cbConfig.Text = ""
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err = bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
@@ -2300,10 +2750,17 @@ func newUserDecline(c *UserCache, ID string) {
 
 	timeNow := time.Now().UTC()
 	_, err = stmt.Exec(models.UserBanned, c.User.TelegramID, timeNow, userID)
+	if err != nil {
+		log.Println(err)
+	}
 
 	reply := fmt.Sprintf(`Unfortunately your request has been <b>declined</b> by <a href="tg://user?id=%v">%v %v</a> at %v. Try to text to admin`, c.User.TelegramID, c.User.FirstName, c.User.LastName, timeNow)
-	msg := tgbotapi.NewMessage(int64(userID), "Sorry, your request was denied")
-	bot.Send(msg)
+	msg := tgbotapi.NewMessage(int64(userID), reply)
+	msg.ParseMode = "HTML"
+	_, err = bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 
 	reply = fmt.Sprintf(`<a href="tg://user?id=%v">%v %v</a> has been <b>banned</b>`, u.TelegramID, u.FirstName, u.LastName)
 	msgEdited := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, reply)
@@ -2315,39 +2772,54 @@ func newUserDecline(c *UserCache, ID string) {
 
 	cbConfig.CallbackQueryID = c.CallbackID
 	cbConfig.Text = ""
-	bot.AnswerCallbackQuery(cbConfig)
+	_, err = bot.AnswerCallbackQuery(cbConfig)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
-func newUserAccpet(c *UserCache, ID string) {
+func newUserAccpet(c *models.UserCache, ID string) {
 
 	var cbConfig tgbotapi.CallbackConfig
 
 	userID, err := strconv.Atoi(ID)
 	if err != nil {
 		msg := tgbotapi.NewMessage(c.ChatID, "Sorry, something went wrong")
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
+
 		return
 	}
 
 	rows, err := db.Query(`
 		SELECT 
-			u.tgid,
-			u.first_name,
-			u.last_name,
-			u.status,
-			u.changed_at
-		FROM users u
+			UDb.tgid,
+			UDb.first_name,
+			UDb.last_name,
+			UDb.status,
+			UDb.changed_at
+		FROM 
+			users UDb 
 		WHERE
-			u.tgid=?`, userID)
+			UDb.tgid=?`, userID)
 	if err != nil {
 		msg := tgbotapi.NewMessage(c.ChatID, "Sorry, something went wrong")
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
+
 		return
 	}
 
-	var u dbUsers
+	var u models.DbUsers
 	if rows.Next() {
-		rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName, &u.Status, &u.ChangedAt)
+		err := rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName, &u.Status, &u.ChangedAt)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 	rows.Close()
 
@@ -2358,11 +2830,17 @@ func newUserAccpet(c *UserCache, ID string) {
 
 		msg := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, reply)
 		msg.ParseMode = "HTML"
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 
 		cbConfig.CallbackQueryID = c.CallbackID
 		cbConfig.Text = ""
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err = bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
@@ -2383,17 +2861,23 @@ func newUserAccpet(c *UserCache, ID string) {
 	timeNow := time.Now().UTC()
 	_, err = stmt.Exec(models.UserApprowed, c.User.TelegramID, timeNow, u.TelegramID)
 	if err != nil {
-		reply := fmt.Sprintf(`Can't approve '<a href="tg://user?id=%v">%v %v</a>. Err:%v`, u.TelegramID, u.FirstName, u.LastName, err.Error())
+		reply := fmt.Sprintf(`Can'TDb approve '<a href="tg://user?id=%v">%v %v</a>. Err:%v`, u.TelegramID, u.FirstName, u.LastName, err.Error())
 		msg := tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ParseMode = "HTML"
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	reply := fmt.Sprintf(`Your account has been <b>approved</b> by <a href="tg://user?id=%v">%v %v</a> at %v`, c.User.TelegramID, c.User.FirstName, c.User.LastName, timeNow)
 	msg := tgbotapi.NewMessage(int64(userID), reply)
 	msg.ParseMode = "HTML"
-	bot.Send(msg)
+	_, err = bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 
 	reply = fmt.Sprintf(`<a href="tg://user?id=%v">%v %v</a> has been <b>approved</b>`, u.TelegramID, u.FirstName, u.LastName)
 	msgEdited := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, reply)
@@ -2405,36 +2889,47 @@ func newUserAccpet(c *UserCache, ID string) {
 
 	cbConfig.CallbackQueryID = c.CallbackID
 	cbConfig.Text = ""
-	bot.AnswerCallbackQuery(cbConfig)
+	_, err = bot.AnswerCallbackQuery(cbConfig)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
-func changeStatus(c *UserCache, newStatus string) {
+func changeStatus(c *models.UserCache, action string) {
 
-	var t dbTasks
+	var t models.DbTasks
 	var cbConfig tgbotapi.CallbackConfig
+
+	newStatus := actionStatus[action]
 
 	tguID := c.User.TelegramID
 
 	rows, err := db.Query(`
 		SELECT			
-			t.id,
-			t.status,
-			t.to_user,
-			t.from_user
-		FROM tasks t
+			TDb.id,
+			TDb.status,
+			TDb.to_user,
+			TDb.from_user
+		FROM tasks TDb
 		WHERE 
-			t.id=?
-			AND (t.to_user=? OR t.from_user=?)`, c.TaskID, tguID, tguID)
+			TDb.id=?
+			AND (TDb.to_user=? OR TDb.from_user=?)`, c.TaskID, tguID, tguID)
 	if err != nil {
-		cbConfig.Text = "Something went wrong while checking current task status"
+		cbConfig.Text = "Something went wrong while checking current Task status"
 		cbConfig.ShowAlert = true
 		cbConfig.CallbackQueryID = c.CallbackID
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	if rows.Next() {
-		rows.Scan(&t.ID, &t.Status, &t.ToUser, &t.FromUser)
+		err := rows.Scan(&t.ID, &t.Status, &t.ToUser, &t.FromUser)
+		if err != nil {
+			log.Println(err)
+		}
 	} else {
 		return
 	}
@@ -2448,13 +2943,17 @@ func changeStatus(c *UserCache, newStatus string) {
 		taskType = "Sent"
 	}
 
+	//dfsdf := actionStatus.FindByValue(TDb.Status)
 	rule := taskRules[taskType][t.Status]
 
-	if !rule.Contains(newStatus) {
-		cbConfig.Text = fmt.Sprintf("It isn't allowed to change the status to %v for Task #%v", newStatus, t.ID)
+	if !rule.Contains(action) {
+		cbConfig.Text = fmt.Sprintf("It isn'TDb allowed to change the status to %v for Task #%v", newStatus, t.ID)
 		cbConfig.ShowAlert = true
 		cbConfig.CallbackQueryID = c.CallbackID
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 
 		updateTaskInlineKeyboard(c.ChatID, c.MessageID, c.TaskID, taskType, t.Status)
 		return
@@ -2470,25 +2969,34 @@ func changeStatus(c *UserCache, newStatus string) {
 		WHERE 
 			id=?`)
 	if err != nil {
-		cbConfig.Text = "Something went wrong while updating task status"
+		cbConfig.Text = "Something went wrong while updating Task status"
 		cbConfig.ShowAlert = true
 		cbConfig.CallbackQueryID = c.CallbackID
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	_, err = stmt.Exec(newStatus, time.Now().UTC(), c.User.TelegramID, t.ID)
 	if err != nil {
-		cbConfig.Text = "Something went wrong while updating task status"
+		cbConfig.Text = "Something went wrong while updating Task status"
 		cbConfig.ShowAlert = true
 		cbConfig.CallbackQueryID = c.CallbackID
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	cbConfig.Text = fmt.Sprintf("Status has been changed to %v for Task %v", newStatus, t.ID)
 	cbConfig.CallbackQueryID = c.CallbackID
-	bot.AnswerCallbackQuery(cbConfig)
+	_, err = bot.AnswerCallbackQuery(cbConfig)
+	if err != nil {
+		log.Println(err)
+	}
 
 	updateTaskInlineKeyboard(c.ChatID, c.MessageID, t.ID, taskType, newStatus)
 }
@@ -2509,33 +3017,36 @@ func updateTaskInlineKeyboard(chatID int64, msgID int, taskID int, taskType stri
 	}
 }
 
-func showTask(c *UserCache) {
+func showTask(c *models.UserCache) {
 
 	rows, err := db.Query(`
 		SELECT
-			t.id,
-			t.from_user,
-			t.to_user,
-			t.status,
-			t.changed_at,
-			t.changed_by,
-			t.comments,			
-			t.title,
-			t.description,			
-			t.images,
-			t.documents	
-		FROM tasks t
+			TDb.id,
+			TDb.from_user,
+			TDb.to_user,
+			TDb.status,
+			TDb.changed_at,
+			TDb.changed_by,
+			TDb.comment,			
+			TDb.title,
+			TDb.description,			
+			TDb.images,
+			TDb.documents	
+		FROM tasks TDb
 		WHERE
-			t.id=?
-			AND (t.to_user=? OR t.from_user=?)`, c.TaskID, c.User.TelegramID, c.User.TelegramID)
+			TDb.id=?
+			AND (TDb.to_user=? OR TDb.from_user=?)`, c.TaskID, c.User.TelegramID, c.User.TelegramID)
 	if err != nil {
-		msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting task info")
-		bot.Send(msg)
+		msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting Task info")
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 	defer rows.Close()
 
-	var t dbTasks
+	var t models.DbTasks
 
 	if rows.Next() {
 		err = rows.Scan(&t.ID, &t.FromUser, &t.ToUser, &t.Status, &t.ChangedAt, &t.ChangedBy, &t.Comments, &t.Title, &t.Description, &t.Images, &t.Documents)
@@ -2543,14 +3054,20 @@ func showTask(c *UserCache) {
 			log.Println(err)
 		}
 	} else {
-		msg := tgbotapi.NewMessage(c.ChatID, fmt.Sprintln("Can't find any task with ID: ", c.TaskID))
-		bot.Send(msg)
+		msg := tgbotapi.NewMessage(c.ChatID, fmt.Sprintln("Can'TDb find any Task with ID: ", c.TaskID))
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	if t.ToUser != c.User.TelegramID && t.FromUser != c.User.TelegramID {
 		msg := tgbotapi.NewMessage(c.ChatID, "Access denided")
-		bot.Send(msg)
+		_, err := bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
@@ -2578,14 +3095,14 @@ func showTask(c *UserCache) {
 	kbdReply = append(kbdReply, btnRow)
 
 	//ми прийшли сюди з меню задач. Запсукаємо слайдер
-	if c.editingTaskIndx != 0 {
+	if c.TaskSlider.EditingTaskIndx != 0 {
 		var btnRowNavigation []tgbotapi.InlineKeyboardButton
 
-		if c.editingTaskIndx > 1 {
+		if c.TaskSlider.EditingTaskIndx > 1 {
 			btnRowNavigation = append(btnRowNavigation, tgbotapi.NewInlineKeyboardButtonData("← Previous", models.Previous))
 		}
 
-		if c.editingTaskIndx < len(c.tasks) {
+		if c.TaskSlider.EditingTaskIndx <= len(c.TaskSlider.Tasks) {
 			btnRowNavigation = append(btnRowNavigation, tgbotapi.NewInlineKeyboardButtonData("Next →", models.Next))
 		}
 
@@ -2595,13 +3112,13 @@ func showTask(c *UserCache) {
 	replyMarkup := tgbotapi.NewInlineKeyboardMarkup(kbdReply...)
 
 	var msgSent tgbotapi.Message
-	if c.currentMessage == 0 {
+	if c.CurrentMessage == 0 {
 		msg := tgbotapi.NewMessage(c.ChatID, reply)
 		msg.ReplyMarkup = replyMarkup
 		msg.ParseMode = "HTML"
 		msgSent, err = bot.Send(msg)
 	} else {
-		msg := tgbotapi.NewEditMessageText(c.ChatID, c.currentMessage, reply)
+		msg := tgbotapi.NewEditMessageText(c.ChatID, c.CurrentMessage, reply)
 		msg.BaseEdit.ReplyMarkup = &replyMarkup
 		msg.ParseMode = "HTML"
 		msgSent, err = bot.Send(msg)
@@ -2609,24 +3126,23 @@ func showTask(c *UserCache) {
 
 	if err != nil {
 		log.Println(err)
-		c.currentMessage = 0
+		c.CurrentMessage = 0
 		return
 	}
 
-	c.currentMessage = msgSent.MessageID
+	c.CurrentMessage = msgSent.MessageID
 }
 
-func showHistory(c *UserCache) {
+func showHistory(c *models.UserCache) {
 
 	var cbConfig tgbotapi.CallbackConfig
-	var row History
-	var xs []History
+	var row models.DbHistory
+	var xs []models.DbHistory
 
 	rows, err := db.Query(`
 		SELECT 
 			h.status,
 			h.date,
-			h.comments,
 			h.taskid,							
 			u.tgid,
 			u.first_name,
@@ -2641,44 +3157,50 @@ func showHistory(c *UserCache) {
 			tasks t 
 			ON h.taskid = t.id
 		WHERE
-			h.taskid=?			
+			h.taskid=?	
+			AND (t.from_user=?
+				OR t.to_user=?)		
 		ORDER BY 
 			h.date`, c.TaskID, c.User.TelegramID, c.User.TelegramID)
 	if err != nil {
-		cbConfig.Text = "Something went wrong while selecting task history"
+		cbConfig.Text = "Something went wrong while selecting Task history"
 		cbConfig.ShowAlert = true
 		cbConfig.CallbackQueryID = c.CallbackID
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	for rows.Next() {
-		rows.Scan(&row.h.Status, &row.h.Date, &row.h.Comments, &row.h.TaskID, &row.u.TelegramID, &row.u.FirstName, &row.u.LastName, &row.t.Title)
-		xs = append(xs, row)
+		err := rows.Scan(&row.HDb.Status, &row.HDb.Date, &row.HDb.TaskID, &row.UDb.TelegramID, &row.UDb.FirstName, &row.UDb.LastName, &row.TDb.Title)
+		if err != nil {
+			log.Println(err)
+		} else {
+			xs = append(xs, row)
+		}
 	}
 	rows.Close()
 
 	if len(xs) == 0 {
-		cbConfig.Text = "There is no history for this task"
+		cbConfig.Text = "There is no history for this Task"
 		cbConfig.ShowAlert = true
 		cbConfig.CallbackQueryID = c.CallbackID
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	reply := fmt.Sprintf(`<strong>Task #%v</strong>
 	<i>Title</i> %v
 
-	`, xs[0].h.TaskID, xs[0].t.Title)
+	`, xs[0].HDb.TaskID, xs[0].TDb.Title)
 
 	for key, val := range xs {
-		reply += fmt.Sprintf(`%v. <b>%v</b> by <a href="tg://user?id=%v">%v %v</a> at %v`, key+1, val.h.Status, val.u.TelegramID, val.u.FirstName, val.u.LastName, val.h.Date.Time)
-		if val.h.Comments != "" {
-			reply += fmt.Sprintf(`<v>Comment:</i> %v`, val.h.Comments)
-		}
-		reply += `
-
-		`
+		reply += fmt.Sprintf(`%v. <b>%v</b> by <a href="tg://user?id=%v">%v %v</a> at %v\n`, key+1, val.HDb.Status, val.UDb.TelegramID, val.UDb.FirstName, val.UDb.LastName, val.HDb.Date.Time)
 	}
 
 	if c.CallbackID == "" {
@@ -2696,33 +3218,126 @@ func showHistory(c *UserCache) {
 	}
 }
 
-func addComment(c *UserCache) {
+func showComments(c *models.UserCache) {
 
-	var t dbTasks
+	var cbConfig tgbotapi.CallbackConfig
+	var row models.DbComment
+	var xs []models.DbComment
+
+	rows, err := db.Query(`
+		SELECT 
+			c.comment,
+			c.date,
+			c.taskid,							
+			c.tgid,
+			u.first_name,
+			u.last_name,
+			t.title
+		FROM
+			task_comments c
+		LEFT JOIN
+			users u
+			ON c.tgid = u.tgid
+		LEFT JOIN
+			tasks t 
+			ON c.taskid = t.id
+		WHERE
+			c.taskid=?
+			AND (t.from_user=?
+				OR t.to_user=?)		
+		ORDER BY 
+			c.date`, c.TaskID, c.User.TelegramID, c.User.TelegramID)
+	if err != nil {
+		cbConfig.Text = "Something went wrong while selecting Task history"
+		cbConfig.ShowAlert = true
+		cbConfig.CallbackQueryID = c.CallbackID
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
+		return
+	}
+
+	for rows.Next() {
+		err := rows.Scan(&row.CDb.Comment, &row.CDb.Date, &row.CDb.TaskID, &row.UDb.TelegramID, &row.UDb.FirstName, &row.UDb.LastName, &row.TDb.Title)
+		if err != nil {
+			log.Println(err)
+		} else {
+			xs = append(xs, row)
+		}
+	}
+	rows.Close()
+
+	if len(xs) == 0 {
+		cbConfig.Text = "There is no comments for this Task"
+		cbConfig.ShowAlert = true
+		cbConfig.CallbackQueryID = c.CallbackID
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
+		return
+	}
+
+	reply := fmt.Sprintf(`<strong>Task #%v</strong>
+	<i>Title</i> %v
+
+	`, xs[0].CDb.TaskID, xs[0].TDb.Title)
+
+	for key, val := range xs {
+		reply += fmt.Sprintf(`<b>%v. Comment:</b> %v
+		by <a href="tg://user?id=%v">%v %v</a> at %v`, key+1, val.CDb.Comment, val.UDb.TelegramID, val.UDb.FirstName, val.UDb.LastName, val.CDb.Date.Time)
+		reply += fmt.Sprintln()
+	}
+
+	if c.CallbackID == "" {
+		msg := tgbotapi.NewMessage(c.ChatID, reply)
+		msg.ParseMode = "HTML"
+		_, err = bot.Send(msg)
+	} else {
+		msgEdited := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, reply)
+		msgEdited.ParseMode = "HTML"
+		_, err = bot.Send(msgEdited)
+	}
+
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+func addComment(c *models.UserCache) {
+
+	var t models.DbTasks
 	var cbConfig tgbotapi.CallbackConfig
 
 	tguID := c.User.TelegramID
 
 	rows, err := db.Query(`
 		SELECT			
-			t.id,
-			t.status,
-			t.to_user,
-			t.from_user
-		FROM tasks t
+			TDb.id,
+			TDb.status,
+			TDb.to_user,
+			TDb.from_user
+		FROM tasks TDb
 		WHERE 
-			t.id=?
-			AND (t.to_user=? OR t.from_user=?)`, c.TaskID, tguID, tguID)
+			TDb.id=?
+			AND (TDb.to_user=? OR TDb.from_user=?)`, c.TaskID, tguID, tguID)
 	if err != nil {
-		cbConfig.Text = "Something went wrong while checking current task status"
+		cbConfig.Text = "Something went wrong while checking current Task status"
 		cbConfig.ShowAlert = true
 		cbConfig.CallbackQueryID = c.CallbackID
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 		return
 	}
 
 	if rows.Next() {
-		rows.Scan(&t.ID, &t.Status, &t.ToUser, &t.FromUser)
+		err := rows.Scan(&t.ID, &t.Status, &t.ToUser, &t.FromUser)
+		if err != nil {
+			log.Println(err)
+		}
 	} else {
 		return
 	}
@@ -2739,20 +3354,39 @@ func addComment(c *UserCache) {
 	rule := taskRules[taskType][t.Status]
 
 	if !rule.Contains(models.Comment) {
-		cbConfig.Text = fmt.Sprintf("It isn't allowed to comment Task #%v", t.ID)
+		cbConfig.Text = fmt.Sprintf("It isn'TDb allowed to comment Task #%v", t.ID)
 		cbConfig.ShowAlert = true
 		cbConfig.CallbackQueryID = c.CallbackID
-		bot.AnswerCallbackQuery(cbConfig)
+		_, err := bot.AnswerCallbackQuery(cbConfig)
+		if err != nil {
+			log.Println(err)
+		}
 
 		updateTaskInlineKeyboard(c.ChatID, c.MessageID, c.TaskID, taskType, t.Status)
 		return
 	}
 
-	c.currentMenu = models.MenuComment
+	//видалимо повідомлення в якому натиснули кнопку коментувати
+	//немає сенсу тримати його, далі починається інша логіка
+	if c.CurrentMessage != 0 {
+		_, err := bot.DeleteMessage(tgbotapi.DeleteMessageConfig{
+			ChatID:    c.ChatID,
+			MessageID: c.CurrentMessage,
+		})
+		if err != nil {
+			log.Println(err)
+		}
+		c.CurrentMessage = 0
+	}
+
+	c.CurrentMenu = models.MenuComment
 	reply := fmt.Sprintf(`<strong>Task #%v</strong>
-	Enter comment:`)
+	Enter comment: <i>(then pres enter)</i>`, c.TaskID)
 
 	msg := tgbotapi.NewMessage(c.ChatID, reply)
 	msg.ParseMode = "HTML"
-	bot.Send(msg)
+	_, err = bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
 }

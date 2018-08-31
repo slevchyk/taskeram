@@ -1,10 +1,9 @@
-package main
+package models
 
 import (
 	"database/sql/driver"
-	"time"
-
 	"gopkg.in/telegram-bot-api.v4"
+	"time"
 )
 
 //NullTime special type for scan sql rows with Null data for time type variables
@@ -27,7 +26,7 @@ func (nt NullTime) Value() (driver.Value, error) {
 	return nt.Time, nil
 }
 
-type dbUsers struct {
+type DbUsers struct {
 	ID         int
 	TelegramID int
 	FirstName  string
@@ -38,7 +37,7 @@ type dbUsers struct {
 	ChangedAt  NullTime
 }
 
-type dbTasks struct {
+type DbTasks struct {
 	ID          int
 	FromUser    int
 	ToUser      int
@@ -52,45 +51,54 @@ type dbTasks struct {
 	Documents   string
 }
 
-type dbTaskHistory struct {
+type DbTaskHistory struct {
 	ID       int
 	TaskID   int
 	UserID   int
 	Date     NullTime
 	Status   string
-	Comments string
 }
 
-type dbNotifications struct {
-	ID        int
-	TUserID   int
-	MessageID int
-	ACTION    string
+type DbTaskComments struct {
+	ID       int
+	TaskID   int
+	UserID   int
+	Date     NullTime
+	Comment string
+}
+
+type userSlider struct {
+	EditingUserIndx int
+	Users           map[int]DbUsers
+}
+
+type taskSlider struct {
+	EditingTaskIndx int
+	Tasks           map[int]DbTasks
 }
 
 type UserCache struct {
-	User            dbUsers
-	ChatID          int64
-	MessageID       int
-	Text            string
-	Command         string
-	Arguments       string
-	CallbackID      string
-	CallbackData    string
-	TaskID          int
-	currentMenu     string
-	currentMessage  int
-	NewTask         *task
-	editingUserIndx int
-	users           map[int]dbUsers
-	editingTaskIndx int
-	tasks           map[int]dbTasks
-	Message         *tgbotapi.Message
+	User           DbUsers
+	ChatID         int64
+	MessageID      int
+	Text           string
+	Command        string
+	Arguments      string
+	CallbackID     string
+	CallbackData   string
+	TaskID         int
+	CurrentMenu    string
+	CurrentMessage int
+	NewTask        *Task
+	Users          map[int]DbUsers
+	UserSlider     userSlider
+	TaskSlider     taskSlider
+	Message        *tgbotapi.Message
 }
 
-type task struct {
+type Task struct {
 	Step        int
-	ToUser      *dbUsers
+	ToUser      *DbUsers
 	Title       string
 	Description string
 }
@@ -106,12 +114,6 @@ func (aa AllowedActions) Contains(s string) bool {
 	}
 
 	return false
-}
-
-type History struct {
-	h dbTaskHistory
-	t dbTasks
-	u dbUsers
 }
 
 type Buttons struct {
@@ -141,4 +143,16 @@ type Buttons struct {
 	History   tgbotapi.KeyboardButton
 	Close     tgbotapi.KeyboardButton
 	Reject    tgbotapi.KeyboardButton
+}
+
+type DbHistory struct {
+	HDb DbTaskHistory
+	TDb DbTasks
+	UDb DbUsers
+}
+
+type DbComment struct {
+	CDb DbTaskComments
+	TDb DbTasks
+	UDb DbUsers
 }
