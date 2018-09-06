@@ -54,6 +54,7 @@ builds/**/images/*
 
 #db
 *.sqlite
+*.bckp
 
 # security / ssl
 *.pem
