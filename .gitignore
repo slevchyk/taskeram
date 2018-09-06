@@ -26,6 +26,9 @@ _testmain.go
 # GoLand
 *.iml
 
+# Configs
+*.cfg
+
 # Directory-based project format:
 .idea/
 .idea/workspace.xml

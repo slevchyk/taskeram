@@ -1,10 +1,25 @@
 package models
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"gopkg.in/telegram-bot-api.v4"
 	"time"
 )
+
+type Config struct {
+	Telegram struct{
+		Token string `json:"token"`
+		AdminID string `json:"admin_id"`
+	} `json:"telegram"`
+	Database struct{
+		Type string `json:"type"`
+		Name string `json:"name"`
+		User string `json:"user"`
+		Password string `json:"password"`
+	} `json:"database"`
+	DB *sql.DB
+}
 
 //NullTime special type for scan sql rows with Null data for time type variables
 type NullTime struct {

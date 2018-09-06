@@ -2,7 +2,10 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"github.com/slevchyk/taskeram/database"
+	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
@@ -15,6 +18,7 @@ import (
 )
 
 var (
+	cfg          models.Config
 	db           *sql.DB
 	bot          *tgbotapi.BotAPI
 	cache        map[int]*models.UserCache
@@ -26,18 +30,21 @@ var (
 func init() {
 	var err error
 
-	db, err = sql.Open("sqlite3", "tasker.sqlite")
+	cfg, err = LoadConfiguration("taskeram.cfg")
 	if err != nil {
-		log.Fatal("Can't connect to DB ", err.Error())
+		log.Fatal("Can't load configuration file config.json", err.Error())
 	}
 
-	token := os.Getenv("TELEGRAM_TASKERAM_TOKEN")
-
-	if token == "" {
-		log.Fatal("Env variable TELEGRAM_TASKERAM_TOKEN does not exist")
+	db, err = database.ConnectDB(cfg)
+	if err != nil {
+		log.Fatal("Can't connect to DB")
 	}
 
-	bot, err = tgbotapi.NewBotAPI(token)
+	if cfg.Telegram.Token == "" {
+		log.Fatal("Telegram token does not exist in config file")
+	}
+
+	bot, err = tgbotapi.NewBotAPI(cfg.Telegram.Token)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -75,7 +82,7 @@ func main() {
 			continue
 		}
 
-		u := getUserByTelegramID(tgid)
+		u := database.GetUserByTelegramID(tgid, db)
 
 		//Якщо в цього користувача ще не має власних налаштувань сесії, то ініціалізуємо їх
 		if _, ok := cache[tgid]; !ok {
@@ -127,154 +134,27 @@ func main() {
 	}
 }
 
-func initialization() {
-	initDB()
-	initData()
+func LoadConfiguration(file string) (models.Config, error) {
+	var config models.Config
+
+	cfgFile, err := ioutil.ReadFile(file)
+	if err != nil {
+		log.Println(err)
+		return config, err
+	}
+
+	err = json.Unmarshal(cfgFile, &config)
+	if err != nil {
+		log.Println(err)
+		return config, err
+	}
+
+	return config, nil
 }
 
-func initDB() {
-
-	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS 'users'(
-			'id' INTEGER PRIMARY KEY AUTOINCREMENT,
-			'tgid' INTEGER,			
-			'first_name' TEXT,
-			'last_name' TEXT,
-			'admin' INTEGER DEFAULT 0,
-			'status' TEXT,
-			'changed_by' INTEGER DEFAULT 0,
-			'changed_at' DATE,
-			'comment' TEXT DEFAULT '');`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS 'user_history'(
-			'id' INTEGER PRIMARY KEY AUTOINCREMENT,
-			'userid' INTEGER REFERENCES users,
-			'status' TEXT,
-			'changed_by' INTEGER DEFAULT 0,
-			'changed_at' DATE,
-			'admin' INTEGER);`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(`
-		CREATE TRIGGER IF NOT EXISTS update_user_history AFTER UPDATE ON users WHEN (old.status <> new.status)
-		BEGIN
-			INSERT INTO user_history(status, changed_by, changed_at, admin) values (new.status, new.changed_by, new.changed_at, new.admin);
-		END;`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS  'tasks'(
-			'id' INTEGER PRIMARY KEY AUTOINCREMENT ,
-			'from_user' INTEGER NOT NULL,
-			'to_user' INTEGER NOT NULL,
-			'status' TEXT NOT NULL,
-			'changed_at' DATE NOT NULL,
-			'changed_by' INTEGER NOT NULL,			
-			'title' TEXT NOT NULL,
-			'description' TEXT DEFAULT '',
-			'comment' TEXT DEFAULT '',
-			'commented_at' DATE,
-			'commented_by' INTEGER,
-			'images' TEXT DEFAULT '',
-			'documents' TEXT DEFAULT '');`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS 'task_history'(
-			'id' INTEGER PRIMARY KEY AUTOINCREMENT,
-			'taskid' INTEGER REFERENCES tasks,
-			'tgid' INTEGER REFERENCES users,
-			'date' DATE,
-			'status' INTEGER,			
-			'comment' TEXT
-			);`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(`
-		CREATE TRIGGER IF NOT EXISTS insert_task_history AFTER INSERT ON tasks
-		BEGIN
-			INSERT INTO task_history(date, status, taskid, tgid) values (new.changed_at, new.status, new.id, new.changed_by);
-		END;`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(`
-		CREATE TRIGGER IF NOT EXISTS update_task_history AFTER UPDATE ON tasks WHEN (old.status <> new.status)
-		BEGIN
-			INSERT INTO task_history(date, status, taskid, tgid) values (new.changed_at, new.status, new.id, new.changed_by);
-		END;`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS 'task_comments'(
-			'id' INTEGER PRIMARY KEY AUTOINCREMENT,
-			'taskid' INTEGER REFERENCES tasks,
-			'tgid' INTEGER REFERENCES users,
-			'date' DATE,			
-			'comment' TEXT
-			);`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(`
-		CREATE TRIGGER IF NOT EXISTS update_task_comments AFTER UPDATE ON tasks WHEN (old.comment <> new.comment)
-		BEGIN
-			INSERT INTO task_comments(taskid, tgid, date, comment) values (new.id, new.commented_by, new.commented_at,  new.comment);
-		END;`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	envID := os.Getenv("TELEGRAM_TASKERAM_ADMIN")
-	if envID == "" {
-		log.Fatal("Env variable TELEGRAM_TASKERAM_ADMIN does not exist")
-	}
-
-	tgID, err := strconv.Atoi(envID)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	rows, err := db.Query(`
-		SELECT
-		u.id
-		FROM 
-			users u
-		WHERE
-			u.tgid=?`, tgID)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		stmt, err := db.Prepare(`
-			INSERT into 'users'(tgid, first_name, last_name, admin, status, changed_at) VALUES (?,?,?,?,?,?)`)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		_, err = stmt.Exec(tgID, "admin", "admin", 1, models.UserApprowed, time.Now().UTC())
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
+func initialization() {
+	database.InitDB(db, cfg)
+	initData()
 }
 
 func initData() {
@@ -680,6 +560,7 @@ func handleMain(c *models.UserCache) {
 	msg := tgbotapi.NewMessage(chatID, "Menu: <b>Main</b>")
 	msg.ParseMode = "HTML"
 	msg.ReplyMarkup = markup
+	msg.ReplyToMessageID = c.MessageID
 	_, err := bot.Send(msg)
 	if err != nil {
 		log.Println(err)
@@ -700,7 +581,7 @@ func handleUsers(c *models.UserCache) {
 	btnRow2 := tgbotapi.NewKeyboardButtonRow(buttons.View, buttons.Edit)
 
 	markup := tgbotapi.NewReplyKeyboard(btnRow1, btnRow2)
-	markup.Selective = true
+	//markup.Selective = true
 
 	msg := tgbotapi.NewMessage(c.ChatID, "Menu: <b>Users</b>")
 	msg.ParseMode = "HTML"
@@ -726,7 +607,7 @@ func handleUsersView(c *models.UserCache) {
 	btnRow2 := tgbotapi.NewKeyboardButtonRow(buttons.All, buttons.Requests, buttons.Banned)
 
 	markup := tgbotapi.NewReplyKeyboard(btnRow1, btnRow2)
-	markup.Selective = true
+	//markup.Selective = true
 
 	msg := tgbotapi.NewMessage(c.ChatID, "Menu: <b>Users->View</b>")
 	msg.ParseMode = "HTML"
@@ -760,7 +641,7 @@ func handleUsersViewALl(c *models.UserCache) {
 		ORDER BY
 			u.id;`, models.UserApprowed)
 	if err != nil {
-		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select users from db")
+		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select users from database")
 		msg.ReplyToMessageID = c.MessageID
 		_, err := bot.Send(msg)
 		if err != nil {
@@ -822,7 +703,7 @@ func handleUsersViewRequests(c *models.UserCache) {
 		WHERE
 			u.status=?;`, models.UserRequested)
 	if err != nil {
-		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select users for approving from db")
+		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select users for approving from database")
 		msg.ReplyToMessageID = c.MessageID
 		_, err := bot.Send(msg)
 		if err != nil {
@@ -884,7 +765,7 @@ func handleUsersViewBanned(c *models.UserCache) {
 		WHERE
 			u.status=?;`, models.UserBanned)
 	if err != nil {
-		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select banned users from db")
+		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select banned users from database")
 		msg.ReplyToMessageID = c.MessageID
 		_, err := bot.Send(msg)
 		if err != nil {
@@ -941,7 +822,7 @@ func handleUsersEdit(c *models.UserCache) {
 	btnRow2 := tgbotapi.NewKeyboardButtonRow(buttons.Approve, buttons.Ban, buttons.Unban)
 
 	markup := tgbotapi.NewReplyKeyboard(btnRow1, btnRow2)
-	markup.Selective = true
+	//markup.Selective = true
 
 	msg := tgbotapi.NewMessage(c.ChatID, "Menu: <b>Users->Edit</b>")
 	msg.ParseMode = "HTML"
@@ -1148,7 +1029,7 @@ func handleUsersEditApprove(c *models.UserCache) {
 	btnRow2 := tgbotapi.NewKeyboardButtonRow(buttons.Approve, buttons.Next)
 
 	markup := tgbotapi.NewReplyKeyboard(btnRow1, btnRow2)
-	markup.Selective = true
+	//markup.Selective = true
 	msg.ReplyMarkup = markup
 
 	_, err := bot.Send(msg)
@@ -1361,7 +1242,7 @@ func handleUsersEditBan(c *models.UserCache) {
 	btnRow2 := tgbotapi.NewKeyboardButtonRow(buttons.Ban, buttons.Next)
 
 	markup := tgbotapi.NewReplyKeyboard(btnRow1, btnRow2)
-	markup.Selective = true
+	//markup.Selective = true
 	msg.ReplyMarkup = markup
 
 	_, err := bot.Send(msg)
@@ -1567,7 +1448,7 @@ func handleUsersEditUnban(c *models.UserCache) {
 	btnRow2 := tgbotapi.NewKeyboardButtonRow(buttons.Unban, buttons.Next)
 
 	markup := tgbotapi.NewReplyKeyboard(btnRow1, btnRow2)
-	markup.Selective = true
+	//markup.Selective = true
 	msg.ReplyMarkup = markup
 
 	_, err := bot.Send(msg)
@@ -1586,10 +1467,13 @@ func handleInbox(c *models.UserCache) {
 	row2 := tgbotapi.NewKeyboardButtonRow(buttons.New, buttons.Started, buttons.Rejected)
 	row3 := tgbotapi.NewKeyboardButtonRow(buttons.Completed, buttons.Closed)
 	markup := tgbotapi.NewReplyKeyboard(row1, row2, row3)
+	markup.Selective = true
 
 	msg := tgbotapi.NewMessage(c.ChatID, "Menu: <b>Inbox</b>")
 	msg.ParseMode = "HTML"
 	msg.ReplyMarkup = markup
+	msg.ReplyToMessageID = c.MessageID
+
 	_, err := bot.Send(msg)
 	if err != nil {
 		log.Println(err)
@@ -1626,10 +1510,12 @@ func handleSent(c *models.UserCache) {
 	row2 := tgbotapi.NewKeyboardButtonRow(buttons.New, buttons.Started, buttons.Rejected)
 	row3 := tgbotapi.NewKeyboardButtonRow(buttons.Completed, buttons.Closed)
 	markup := tgbotapi.NewReplyKeyboard(row1, row2, row3)
+	markup.Selective = true
 
-	msg := tgbotapi.NewMessage(c.ChatID, "Menu: <b>Sent<b>")
+	msg := tgbotapi.NewMessage(c.ChatID, "Menu: <b>Sent</b>")
 	msg.ParseMode = "HTML"
 	msg.ReplyMarkup = markup
+	msg.ReplyToMessageID = c.MessageID
 	_, err := bot.Send(msg)
 	if err != nil {
 		log.Println(err)
@@ -2020,7 +1906,7 @@ func handleNew(c *models.UserCache) {
 			}
 
 			markup := tgbotapi.NewReplyKeyboard(keyboard[:]...)
-			markup.Selective = true
+			//markup.Selective = true
 
 			reply := "Choose user:"
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
@@ -2056,7 +1942,7 @@ func handleNew(c *models.UserCache) {
 
 			row1 := tgbotapi.NewKeyboardButtonRow(buttons.Back, buttons.Cancel)
 			markup := tgbotapi.NewReplyKeyboard(row1)
-			markup.Selective = true
+			//markup.Selective = true
 
 			reply := fmt.Sprintf(`<b>New Task</b>
 			To user: <a href="tg://user?id=%v">%v %v</a>
@@ -2090,7 +1976,7 @@ func handleNew(c *models.UserCache) {
 
 			row1 := tgbotapi.NewKeyboardButtonRow(buttons.Back, buttons.Cancel)
 			markup := tgbotapi.NewReplyKeyboard(row1)
-			markup.Selective = true
+			//markup.Selective = true
 
 			reply := fmt.Sprintf(`<b>New Task</b>
 			To user: <a href="tg://user?id=%v">%v %v</a>
@@ -2113,7 +1999,7 @@ func handleNew(c *models.UserCache) {
 
 			row1 := tgbotapi.NewKeyboardButtonRow(buttons.Back, buttons.Cancel)
 			markup := tgbotapi.NewReplyKeyboard(row1)
-			markup.Selective = true
+			//markup.Selective = true
 
 			reply := fmt.Sprintf(`<b>New Task</b>
 			To user: <a href="tg://user?id=%v">%v %v</a>
@@ -2149,7 +2035,7 @@ func handleNew(c *models.UserCache) {
 
 			row1 := tgbotapi.NewKeyboardButtonRow(buttons.Back, buttons.Cancel)
 			markup := tgbotapi.NewReplyKeyboard(row1)
-			markup.Selective = true
+			//markup.Selective = true
 
 			reply := fmt.Sprintf(`<b>New Task</b>
 			To user: <a href="tg://user?id=%v">%v %v</a>
@@ -2173,7 +2059,7 @@ func handleNew(c *models.UserCache) {
 
 			row1 := tgbotapi.NewKeyboardButtonRow(buttons.Back, buttons.Cancel, buttons.Save)
 			markup := tgbotapi.NewReplyKeyboard(row1)
-			markup.Selective = true
+			//markup.Selective = true
 
 			reply := fmt.Sprintf(`<b>New Task</b>
 			To user: <a href="tg://user?id=%v">%v %v</a>
@@ -2348,37 +2234,6 @@ func handleComment(c *models.UserCache) {
 	}
 
 	handleMain(c)
-}
-
-func getUserByTelegramID(userid int) models.DbUsers {
-
-	var u models.DbUsers
-
-	rows, err := db.Query(`
-		SELECT
-			u.id,
-			u.tgid,			
-			u.first_name,
-			u.last_name,
-			u.admin,
-			u.status			
-		FROM 
-			users u
-		WHERE
-			tgid=?`, userid)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	defer rows.Close()
-
-	if rows.Next() {
-		err := rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName, &u.Admin, &u.Status)
-		if err != nil {
-			log.Println(err)
-		}
-	}
-
-	return u
 }
 
 func handleCallbackQuery(c *models.UserCache) {
