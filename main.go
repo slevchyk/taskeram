@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/slevchyk/taskeram/database"
 	"io/ioutil"
 	"log"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/slevchyk/taskeram/dbase"
 	"github.com/slevchyk/taskeram/models"
 	"gopkg.in/telegram-bot-api.v4"
 )
@@ -35,7 +35,7 @@ func init() {
 		log.Fatal("Can't load configuration file config.json", err.Error())
 	}
 
-	db, err = database.ConnectDB(cfg)
+	cfg.DB, err = dbase.ConnectDB(cfg)
 	if err != nil {
 		log.Fatal("Can't connect to DB")
 	}
@@ -82,7 +82,7 @@ func main() {
 			continue
 		}
 
-		u := database.GetUserByTelegramID(tgid, db)
+		u := dbase.GetUserByTelegramID(cfg, tgid)
 
 		//Якщо в цього користувача ще не має власних налаштувань сесії, то ініціалізуємо їх
 		if _, ok := cache[tgid]; !ok {
@@ -153,7 +153,7 @@ func LoadConfiguration(file string) (models.Config, error) {
 }
 
 func initialization() {
-	database.InitDB(db, cfg)
+	dbase.InitDB(cfg)
 	initData()
 }
 
@@ -420,13 +420,14 @@ func handleCommandStart(c *models.UserCache) {
 		return
 	}
 
-	rows, err := db.Query(`
-		SELECT
-		u.id
-		FROM 
-			users u
-		WHERE
-			u.tgid=?`, tgID)
+	rows, err := dbase.SelectUsersByTelegramID(cfg, tgID)
+	//rows, err := db.Query(`
+	//	SELECT
+	//	u.id
+	//	FROM
+	//		users u
+	//	WHERE
+	//		u.tgid=?`, tgID)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -629,19 +630,20 @@ func handleUsersViewALl(c *models.UserCache) {
 
 	var reply string
 
-	rows, err := db.Query(`
-		SELECT 
-			u.tgid,			
-			u.first_name,
-			u.last_name			
-		FROM 
-			users u
-		WHERE
-			u.status=?
-		ORDER BY
-			u.id;`, models.UserApprowed)
+	rows, err := dbase.SelectUsersByStatus(cfg, models.UserApprowed)
+	//rows, err := db.Query(`
+	//	SELECT
+	//		u.tgid,
+	//		u.first_name,
+	//		u.last_name
+	//	FROM
+	//		users u
+	//	WHERE
+	//		u.status=?
+	//	ORDER BY
+	//		u.id;`, models.UserApprowed)
 	if err != nil {
-		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select users from database")
+		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select users from dbase")
 		msg.ReplyToMessageID = c.MessageID
 		_, err := bot.Send(msg)
 		if err != nil {
@@ -656,7 +658,7 @@ func handleUsersViewALl(c *models.UserCache) {
 	var u models.DbUsers
 
 	for rows.Next() {
-		err := rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
+		err := dbase.ScanUser(rows, &u)
 		if err != nil {
 			log.Println(err)
 		} else {
@@ -693,17 +695,18 @@ func handleUsersViewRequests(c *models.UserCache) {
 
 	var reply string
 
-	rows, err := db.Query(`
-		SELECT 
-			u.tgid,
-			u.first_name,
-			u.last_name			
-		FROM 
-			users u
-		WHERE
-			u.status=?;`, models.UserRequested)
+	rows, err := dbase.SelectUsersByStatus(cfg, models.UserRequested)
+	//rows, err := db.Query(`
+	//	SELECT
+	//		u.tgid,
+	//		u.first_name,
+	//		u.last_name
+	//	FROM
+	//		users u
+	//	WHERE
+	//		u.status=?;`, models.UserRequested)
 	if err != nil {
-		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select users for approving from database")
+		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select users for approving from dbase")
 		msg.ReplyToMessageID = c.MessageID
 		_, err := bot.Send(msg)
 		if err != nil {
@@ -718,7 +721,7 @@ func handleUsersViewRequests(c *models.UserCache) {
 	var u models.DbUsers
 
 	for rows.Next() {
-		err := rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
+		err := dbase.ScanUser(rows, &u)
 		if err != nil {
 			log.Println(err)
 		} else {
@@ -755,17 +758,18 @@ func handleUsersViewBanned(c *models.UserCache) {
 
 	var reply string
 
-	rows, err := db.Query(`
-		SELECT 
-			u.tgid,			
-			u.first_name,
-			u.last_name			
-		FROM 
-			users u
-		WHERE
-			u.status=?;`, models.UserBanned)
+	rows, err := dbase.SelectUsersByStatus(cfg, models.UserBanned)
+	//rows, err := db.Query(`
+	//	SELECT
+	//		u.tgid,
+	//		u.first_name,
+	//		u.last_name
+	//	FROM
+	//		users u
+	//	WHERE
+	//		u.status=?;`, models.UserBanned)
 	if err != nil {
-		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select banned users from database")
+		msg := tgbotapi.NewMessage(c.ChatID, "Internal error. Can't select banned users from dbase")
 		msg.ReplyToMessageID = c.MessageID
 		_, err := bot.Send(msg)
 		if err != nil {
@@ -780,7 +784,7 @@ func handleUsersViewBanned(c *models.UserCache) {
 	var u models.DbUsers
 
 	for rows.Next() {
-		err := rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
+		err := dbase.ScanUser(rows, &u)
 		if err != nil {
 			log.Println(err)
 		} else {
@@ -855,19 +859,20 @@ func handleUsersEditApprove(c *models.UserCache) {
 	if editingUser == 0 {
 		doAction = false
 
-		rows, err := db.Query(`
-			SELECT
-				u.id,
-				u.tgid,
-				u.first_name,
-				u.last_name
-			FROM
-				users u
-			WHERE
-				u.status=?
-				AND u.tgid!=?	 
-			ORDER BY
-				u.id`, models.UserRequested, c.User.TelegramID)
+		rows, err := dbase.SelectUsersByTelegramIDStatus(cfg, c.User.TelegramID, models.UserRequested)
+		//rows, err := db.Query(`
+		//	SELECT
+		//		u.id,
+		//		u.tgid,
+		//		u.first_name,
+		//		u.last_name
+		//	FROM
+		//		users u
+		//	WHERE
+		//		u.status=?
+		//		AND u.tgid!=?
+		//	ORDER BY
+		//		u.id`, models.UserRequested, c.User.TelegramID)
 		if err != nil {
 			c.UserSlider.EditingUserIndx = 0
 			c.CurrentMenu = models.MenuUsersEdit
@@ -925,16 +930,7 @@ func handleUsersEditApprove(c *models.UserCache) {
 
 		u := users[editingUser]
 
-		stmt, err := db.Prepare(`
-			UPDATE
-				users
-			SET
-				status=?,
-				changed_at=?,
-				changed_by=?
-			WHERE
-				tgid=? 
-			`)
+		stmt, err := dbase.UpdateUserStatus(cfg)
 		if err != nil {
 			c.UserSlider.EditingUserIndx = 0
 			c.CurrentMenu = models.MenuUsersEdit
@@ -1060,20 +1056,21 @@ func handleUsersEditBan(c *models.UserCache) {
 	if currentUserIndx == 0 {
 		doAction = false
 
-		rows, err := db.Query(`
-			SELECT
-				u.id,
-				u.tgid,
-				u.first_name,
-				u.last_name,
-				u.status				
-			FROM
-				users u
-			WHERE
-				(u.status=? OR u.status=?)
-				AND u.tgid!=?
-			ORDER BY
-				u.id`, models.UserRequested, models.UserApprowed, c.User.TelegramID)
+		rows, err := dbase.SelectUsersForBan(cfg, c.User.TelegramID)
+		//rows, err := db.Query(`
+		//	SELECT
+		//		u.id,
+		//		u.tgid,
+		//		u.first_name,
+		//		u.last_name,
+		//		u.status
+		//	FROM
+		//		users u
+		//	WHERE
+		//		(u.status=? OR u.status=?)
+		//		AND u.tgid!=?
+		//	ORDER BY
+		//		u.id`, models.UserRequested, models.UserApprowed, c.User.TelegramID)
 		if err != nil {
 			c.UserSlider.EditingUserIndx = 0
 			c.CurrentMenu = models.MenuUsersEdit
@@ -1093,7 +1090,7 @@ func handleUsersEditBan(c *models.UserCache) {
 
 		i := 1
 		for rows.Next() {
-			err := rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName, &u.Status)
+			err := dbase.ScanUser(rows, &u)
 			if err != nil {
 				log.Println(err)
 			} else {
@@ -1132,16 +1129,7 @@ func handleUsersEditBan(c *models.UserCache) {
 
 		u := users[currentUserIndx]
 
-		stmt, err := db.Prepare(`
-			UPDATE
-				users
-			SET
-				status=?,
-				changed_at=?,
-				changed_by=?
-			WHERE
-				tgid=? 
-			`)
+		stmt, err := dbase.UpdateUserStatus(cfg)
 		if err != nil {
 			c.UserSlider.EditingUserIndx = 0
 			c.CurrentMenu = models.MenuUsersEdit
@@ -1272,19 +1260,20 @@ func handleUsersEditUnban(c *models.UserCache) {
 	if currentUserIndx == 0 {
 		doAction = false
 
-		rows, err := db.Query(`
-			SELECT
-				u.id,
-				u.tgid,
-				u.first_name,
-				u.last_name
-			FROM
-				users u
-			WHERE
-				u.status=?
-				AND u.tgid!=?
-			ORDER BY
-				u.id`, models.UserBanned, c.User.TelegramID)
+		rows, err := dbase.SelectUsersForUnban(cfg, c.User.TelegramID)
+		//rows, err := db.Query(`
+		//	SELECT
+		//		u.id,
+		//		u.tgid,
+		//		u.first_name,
+		//		u.last_name
+		//	FROM
+		//		users u
+		//	WHERE
+		//		u.status=?
+		//		AND u.tgid!=?
+		//	ORDER BY
+		//		u.id`, models.UserBanned, c.User.TelegramID)
 		if err != nil {
 			c.UserSlider.EditingUserIndx = 0
 			c.CurrentMenu = models.MenuUsersEdit
@@ -1304,7 +1293,7 @@ func handleUsersEditUnban(c *models.UserCache) {
 
 		i := 1
 		for rows.Next() {
-			err := rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName)
+			err := dbase.ScanUser(rows, &u)
 			if err != nil {
 				log.Println(err)
 			} else {
@@ -1343,16 +1332,7 @@ func handleUsersEditUnban(c *models.UserCache) {
 
 		u := users[currentUserIndx]
 
-		stmt, err := db.Prepare(`
-			UPDATE
-				users
-			SET
-				status=?,	  
-				changed_at=?,
-				changed_by=?				
-			WHERE
-				tgid=? 
-			`)
+		stmt, err := dbase.UpdateUserStatus(cfg)
 		if err != nil {
 			c.UserSlider.EditingUserIndx = 0
 			c.CurrentMenu = models.MenuUsersEdit
@@ -1558,18 +1538,19 @@ func handleInboxTasks(c *models.UserCache, menu string, status string) {
 	if editingTask == 0 {
 		doAction = false
 
-		rows, err := db.Query(`
-		SELECT
-			t.ID,
-			t.title,
-			t.description,
-			t.changed_at			
-		FROM tasks t
-		WHERE
-			t.to_user=?
-			AND t.status=?
-		ORDER BY
-			t.id`, c.User.TelegramID, status)
+		rows, err := dbase.SelectInboxTasks(cfg, c.User.TelegramID, status)
+		//rows, err := db.Query(`
+		//SELECT
+		//	t.ID,
+		//	t.title,
+		//	t.description,
+		//	t.changed_at
+		//FROM tasks t
+		//WHERE
+		//	t.to_user=?
+		//	AND t.status=?
+		//ORDER BY
+		//	t.id`, c.User.TelegramID, status)
 		if err != nil {
 			reply := fmt.Sprintf("Something went wrong while selecting %v tasks", status)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
@@ -1589,7 +1570,7 @@ func handleInboxTasks(c *models.UserCache, menu string, status string) {
 
 		i := 1
 		for rows.Next() {
-			err := rows.Scan(&t.ID, &t.Title, &t.Description, &t.ChangedAt)
+			err := dbase.ScanTask(rows, &t)
 			if err != nil {
 				log.Println(err)
 			} else {
@@ -1699,18 +1680,19 @@ func handleSentTasks(c *models.UserCache, menu string, status string) {
 	if editingTask == 0 {
 		doAction = false
 
-		rows, err := db.Query(`
-		SELECT
-			t.ID,
-			t.title,
-			t.description,
-			t.changed_at			
-		FROM tasks t
-		WHERE
-			t.from_user=?
-			AND t.status=?
-		ORDER BY
-			t.id`, c.User.TelegramID, status)
+		rows, err := dbase.SelectSentTasks(cfg, c.User.TelegramID, status)
+		//rows, err := db.Query(`
+		//SELECT
+		//	t.ID,
+		//	t.title,
+		//	t.description,
+		//	t.changed_at
+		//FROM tasks t
+		//WHERE
+		//	t.from_user=?
+		//	AND t.status=?
+		//ORDER BY
+		//	t.id`, c.User.TelegramID, status)
 		if err != nil {
 			reply := fmt.Sprintf("Something went wrong while selecting %v tasks", status)
 			msg := tgbotapi.NewMessage(c.ChatID, reply)
@@ -1730,7 +1712,7 @@ func handleSentTasks(c *models.UserCache, menu string, status string) {
 
 		i := 1
 		for rows.Next() {
-			err := rows.Scan(&t.ID, &t.Title, &t.Description, &t.ChangedAt)
+			err := dbase.ScanTask(rows, &t)
 			if err != nil {
 				log.Println(err)
 			} else {
@@ -1841,15 +1823,16 @@ func handleNew(c *models.UserCache) {
 			handleMain(c)
 			return
 		case models.New, "":
-			rows, err := db.Query(`
-			SELECT 
-				u.tgid,
-				u.first_name,
-				u.last_name
-			FROM 
-				users u
-			WHERE
-				u.status=?`, models.UserApprowed)
+			rows, err := dbase.SelectUsersByStatus(cfg, models.UserApprowed)
+			//rows, err := db.Query(`
+			//SELECT
+			//	u.tgid,
+			//	u.first_name,
+			//	u.last_name
+			//FROM
+			//	users u
+			//WHERE
+			//	u.status=?`, models.UserApprowed)
 			if err != nil {
 				c.CurrentMenu = models.MenuMain
 				c.UserSlider.EditingUserIndx = 0
@@ -1873,7 +1856,7 @@ func handleNew(c *models.UserCache) {
 
 			i := 1
 			for rows.Next() {
-				err := rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName)
+				err := dbase.ScanUser(rows, &u)
 				if err != nil {
 					log.Println(err)
 				} else {
@@ -2199,15 +2182,7 @@ func handleComment(c *models.UserCache) {
 		return
 	}
 
-	stmt, err := db.Prepare(`
-		UPDATE 
-			tasks
-		SET
-			comment=?,
-			commented_at=?,
-			commented_by=?
-		WHERE
-			id=?;`)
+	stmt, err := dbase.UpdateTaskComment(cfg)
 	if err != nil {
 		msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while updating Task comment:(")
 		msg.ReplyToMessageID = c.MessageID
@@ -2424,13 +2399,14 @@ func newUserAdd(c *models.UserCache) {
 
 	cbConfig.CallbackQueryID = c.CallbackID
 
-	rows, err := db.Query(`
-		SELECT 
-			u.id
-		FROM 
-			users u
-		WHERE
-			u.tgid=?`, c.User.TelegramID)
+	rows, err := dbase.SelectUsersByTelegramID(cfg, c.User.TelegramID)
+	//rows, err := db.Query(`
+	//	SELECT
+	//		u.id
+	//	FROM
+	//		users u
+	//	WHERE
+	//		u.tgid=?`, c.User.TelegramID)
 	if err != nil {
 		cbConfig.Text = fmt.Sprintf("Dear, %s %s. sorry, somethings went wrong. Try make request later", c.User.FirstName, c.User.LastName)
 		_, err := bot.AnswerCallbackQuery(cbConfig)
@@ -2495,13 +2471,14 @@ func newUserAdd(c *models.UserCache) {
 
 	var reply string
 
-	rows, err = db.Query(`
-		SELECT
-			u.tgid
-		FROM 
-			users u
-		WHERE
-			u.admin=1`)
+	rows, err = dbase.SelectAdminUsers(cfg)
+	//rows, err = db.Query(`
+	//	SELECT
+	//		u.tgid
+	//	FROM
+	//		users u
+	//	WHERE
+	//		u.admin=1`)
 	if err != nil {
 		reply = fmt.Sprintf("Dear, %s %s. Ok, wait for approval message!", c.User.FirstName, c.User.LastName)
 	} else {
@@ -2511,7 +2488,7 @@ func newUserAdd(c *models.UserCache) {
 
 	var u models.DbUsers
 	for rows.Next() {
-		err := rows.Scan(&u.TelegramID)
+		err := dbase.ScanUser(rows, &u)
 		if err != nil {
 			log.Println(err)
 		}
@@ -2553,17 +2530,18 @@ func newUserDecline(c *models.UserCache, ID string) {
 		return
 	}
 
-	rows, err := db.Query(`
-		SELECT 
-			u.tgid,
-			u.first_name,
-			u.last_name,
-			u.status,
-			u.changed_at
-		FROM 
-			users u
-		WHERE
-			u.tgid=?`, userID)
+	rows, err := dbase.SelectUsersByTelegramID(cfg, userID)
+	//rows, err := db.Query(`
+	//	SELECT
+	//		u.tgid,
+	//		u.first_name,
+	//		u.last_name,
+	//		u.status,
+	//		u.changed_at
+	//	FROM
+	//		users u
+	//	WHERE
+	//		u.tgid=?`, userID)
 	if err != nil {
 		msg := tgbotapi.NewMessage(c.ChatID, "Sorry, something went wrong")
 		_, err := bot.Send(msg)
@@ -2577,7 +2555,7 @@ func newUserDecline(c *models.UserCache, ID string) {
 
 	var u models.DbUsers
 	if rows.Next() {
-		err := rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName, &u.Status, &u.ChangedAt)
+		err := dbase.ScanUser(rows, &u)
 		if err != nil {
 			log.Println(err)
 		}
@@ -2604,22 +2582,13 @@ func newUserDecline(c *models.UserCache, ID string) {
 		return
 	}
 
-	stmt, err := db.Prepare(`
-		UPDATE 
-			users
-		SET 
-			status=?,
-			changed_by=?,
-			changed_at=?			
-		WHERE
-			tgid=?`)
-
+	stmt, err := dbase.UpdateUserStatus(cfg)
 	if err != nil {
 		return
 	}
 
 	timeNow := time.Now().UTC()
-	_, err = stmt.Exec(models.UserBanned, c.User.TelegramID, timeNow, userID)
+	_, err = stmt.Exec(models.UserBanned, timeNow, c.User.TelegramID, userID)
 	if err != nil {
 		log.Println(err)
 	}
@@ -2663,17 +2632,18 @@ func newUserAccpet(c *models.UserCache, ID string) {
 		return
 	}
 
-	rows, err := db.Query(`
-		SELECT 
-			u.tgid,
-			u.first_name,
-			u.last_name,
-			u.status,
-			u.changed_at
-		FROM 
-			users u 
-		WHERE
-			u.tgid=?`, userID)
+	rows, err := dbase.SelectUsersByTelegramID(cfg, userID)
+	//rows, err := db.Query(`
+	//	SELECT
+	//		u.tgid,
+	//		u.first_name,
+	//		u.last_name,
+	//		u.status,
+	//		u.changed_at
+	//	FROM
+	//		users u
+	//	WHERE
+	//		u.tgid=?`, userID)
 	if err != nil {
 		msg := tgbotapi.NewMessage(c.ChatID, "Sorry, something went wrong")
 		_, err := bot.Send(msg)
@@ -2686,7 +2656,7 @@ func newUserAccpet(c *models.UserCache, ID string) {
 
 	var u models.DbUsers
 	if rows.Next() {
-		err := rows.Scan(&u.TelegramID, &u.FirstName, &u.LastName, &u.Status, &u.ChangedAt)
+		err := dbase.ScanUser(rows, &u)
 		if err != nil {
 			log.Println(err)
 		}
@@ -2714,22 +2684,13 @@ func newUserAccpet(c *models.UserCache, ID string) {
 		return
 	}
 
-	stmt, err := db.Prepare(`
-		UPDATE 
-			users
-		SET 
-			status=?,
-			changed_by=?,
-			changed_at=?			
-		WHERE
-			tgid=?`)
-
+	stmt, err := dbase.UpdateUserStatus(cfg)
 	if err != nil {
 		return
 	}
 
 	timeNow := time.Now().UTC()
-	_, err = stmt.Exec(models.UserApprowed, c.User.TelegramID, timeNow, u.TelegramID)
+	_, err = stmt.Exec(models.UserApprowed, timeNow, c.User.TelegramID, u.TelegramID)
 	if err != nil {
 		reply := fmt.Sprintf(`Can't approve '<a href="tg://user?id=%v">%v %v</a>. Err:%v`, u.TelegramID, u.FirstName, u.LastName, err.Error())
 		msg := tgbotapi.NewMessage(c.ChatID, reply)
@@ -2774,16 +2735,17 @@ func changeStatus(c *models.UserCache, action string) {
 
 	tguID := c.User.TelegramID
 
-	rows, err := db.Query(`
-		SELECT			
-			t.id,
-			t.status,
-			t.to_user,
-			t.from_user
-		FROM tasks t
-		WHERE 
-			t.id=?
-			AND (t.to_user=? OR t.from_user=?)`, c.TaskID, tguID, tguID)
+	rows, err := dbase.SelectTasksByIDUserTelegramID(cfg, c.TaskID, tguID)
+	//rows, err := db.Query(`
+	//	SELECT
+	//		t.id,
+	//		t.status,
+	//		t.to_user,
+	//		t.from_user
+	//	FROM tasks t
+	//	WHERE
+	//		t.id=?
+	//		AND (t.to_user=? OR t.from_user=?)`, c.TaskID, tguID, tguID)
 	if err != nil {
 		cbConfig.Text = "Something went wrong while checking current Task status"
 		cbConfig.ShowAlert = true
@@ -2796,7 +2758,7 @@ func changeStatus(c *models.UserCache, action string) {
 	}
 
 	if rows.Next() {
-		err := rows.Scan(&t.ID, &t.Status, &t.ToUser, &t.FromUser)
+		err := dbase.ScanTask(rows, &t)
 		if err != nil {
 			log.Println(err)
 		}
@@ -2828,15 +2790,8 @@ func changeStatus(c *models.UserCache, action string) {
 		return
 	}
 
-	stmt, err := db.Prepare(`
-		UPDATE
-			tasks
-		SET
-			status=?,
-			changed_at=?,
-			changed_by=?
-		WHERE 
-			id=?`)
+
+	stmt, err := dbase.UpdateTaskStatus(cfg)
 	if err != nil {
 		cbConfig.Text = "Something went wrong while updating Task status"
 		cbConfig.ShowAlert = true
@@ -2905,23 +2860,24 @@ func updateTaskInlineKeyboard(chatID int64, msgID int, taskID int, taskType stri
 
 func showTask(c *models.UserCache) {
 
-	rows, err := db.Query(`
-		SELECT
-			t.id,
-			t.from_user,
-			t.to_user,
-			t.status,
-			t.changed_at,
-			t.changed_by,
-			t.comment,			
-			t.title,
-			t.description,			
-			t.images,
-			t.documents	
-		FROM tasks t
-		WHERE
-			t.id=?
-			AND (t.to_user=? OR t.from_user=?)`, c.TaskID, c.User.TelegramID, c.User.TelegramID)
+	rows, err := dbase.SelectTasksByIDUserTelegramID(cfg, c.TaskID, c.User.TelegramID)
+	//rows, err := db.Query(`
+	//	SELECT
+	//		t.id,
+	//		t.from_user,
+	//		t.to_user,
+	//		t.status,
+	//		t.changed_at,
+	//		t.changed_by,
+	//		t.comment,
+	//		t.title,
+	//		t.description,
+	//		t.images,
+	//		t.documents
+	//	FROM tasks t
+	//	WHERE
+	//		t.id=?
+	//		AND (t.to_user=? OR t.from_user=?)`, c.TaskID, c.User.TelegramID, c.User.TelegramID)
 	if err != nil {
 		msg := tgbotapi.NewMessage(c.ChatID, "Something went wrong while selecting Task info")
 		_, err := bot.Send(msg)
@@ -2935,7 +2891,7 @@ func showTask(c *models.UserCache) {
 	var t models.DbTasks
 
 	if rows.Next() {
-		err = rows.Scan(&t.ID, &t.FromUser, &t.ToUser, &t.Status, &t.ChangedAt, &t.ChangedBy, &t.Comments, &t.Title, &t.Description, &t.Images, &t.Documents)
+		err := dbase.ScanTask(rows, &t)
 		if err != nil {
 			log.Println(err)
 		}
@@ -3022,32 +2978,33 @@ func showTask(c *models.UserCache) {
 func showHistory(c *models.UserCache) {
 
 	var cbConfig tgbotapi.CallbackConfig
-	var row models.DbHistory
+	var record models.DbHistory
 	var xs []models.DbHistory
 
-	rows, err := db.Query(`
-		SELECT 
-			h.status,
-			h.date,
-			h.taskid,							
-			u.tgid,
-			u.first_name,
-			u.last_name,
-			t.title
-		FROM
-			task_history h
-		LEFT JOIN
-			users u
-			ON h.tgid = u.tgid
-		LEFT JOIN
-			tasks t 
-			ON h.taskid = t.id
-		WHERE
-			h.taskid=?	
-			AND (t.from_user=?
-				OR t.to_user=?)		
-		ORDER BY 
-			h.date`, c.TaskID, c.User.TelegramID, c.User.TelegramID)
+	rows, err := dbase.SelectHistory(cfg, c.TaskID, c.User.TelegramID)
+	//rows, err := db.Query(`
+	//	SELECT
+	//		h.status,
+	//		h.date,
+	//		h.taskid,
+	//		u.tgid,
+	//		u.first_name,
+	//		u.last_name,
+	//		t.title
+	//	FROM
+	//		task_history h
+	//	LEFT JOIN
+	//		users u
+	//		ON h.tgid = u.tgid
+	//	LEFT JOIN
+	//		tasks t
+	//		ON h.taskid = t.id
+	//	WHERE
+	//		h.taskid=?
+	//		AND (t.from_user=?
+	//			OR t.to_user=?)
+	//	ORDER BY
+	//		h.date`, c.TaskID, c.User.TelegramID, c.User.TelegramID)
 	if err != nil {
 		cbConfig.Text = "Something went wrong while selecting Task history"
 		cbConfig.ShowAlert = true
@@ -3060,11 +3017,11 @@ func showHistory(c *models.UserCache) {
 	}
 
 	for rows.Next() {
-		err := rows.Scan(&row.HDb.Status, &row.HDb.Date, &row.HDb.TaskID, &row.UDb.TelegramID, &row.UDb.FirstName, &row.UDb.LastName, &row.TDb.Title)
+		err := dbase.ScanHistory(rows, &record)
 		if err != nil {
 			log.Println(err)
 		} else {
-			xs = append(xs, row)
+			xs = append(xs, record)
 		}
 	}
 	rows.Close()
@@ -3107,32 +3064,33 @@ func showHistory(c *models.UserCache) {
 func showComments(c *models.UserCache) {
 
 	var cbConfig tgbotapi.CallbackConfig
-	var row models.DbComment
+	var record models.DbComment
 	var xs []models.DbComment
 
-	rows, err := db.Query(`
-		SELECT 
-			c.comment,
-			c.date,
-			c.taskid,							
-			c.tgid,
-			u.first_name,
-			u.last_name,
-			t.title
-		FROM
-			task_comments c
-		LEFT JOIN
-			users u
-			ON c.tgid = u.tgid
-		LEFT JOIN
-			tasks t 
-			ON c.taskid = t.id
-		WHERE
-			c.taskid=?
-			AND (t.from_user=?
-				OR t.to_user=?)		
-		ORDER BY 
-			c.date`, c.TaskID, c.User.TelegramID, c.User.TelegramID)
+	rows, err := dbase.SelectComments(cfg, c.TaskID, c.User.TelegramID)
+	//rows, err := db.Query(`
+	//	SELECT
+	//		c.comment,
+	//		c.date,
+	//		c.taskid,
+	//		c.tgid,
+	//		u.first_name,
+	//		u.last_name,
+	//		t.title
+	//	FROM
+	//		task_comments c
+	//	LEFT JOIN
+	//		users u
+	//		ON c.tgid = u.tgid
+	//	LEFT JOIN
+	//		tasks t
+	//		ON c.taskid = t.id
+	//	WHERE
+	//		c.taskid=?
+	//		AND (t.from_user=?
+	//			OR t.to_user=?)
+	//	ORDER BY
+	//		c.date`, c.TaskID, c.User.TelegramID, c.User.TelegramID)
 	if err != nil {
 		cbConfig.Text = "Something went wrong while selecting Task history"
 		cbConfig.ShowAlert = true
@@ -3145,11 +3103,11 @@ func showComments(c *models.UserCache) {
 	}
 
 	for rows.Next() {
-		err := rows.Scan(&row.CDb.Comment, &row.CDb.Date, &row.CDb.TaskID, &row.UDb.TelegramID, &row.UDb.FirstName, &row.UDb.LastName, &row.TDb.Title)
+		err := dbase.ScanComments(rows, &record)
 		if err != nil {
 			log.Println(err)
 		} else {
-			xs = append(xs, row)
+			xs = append(xs, record)
 		}
 	}
 	rows.Close()
@@ -3198,16 +3156,17 @@ func addComment(c *models.UserCache) {
 
 	tguID := c.User.TelegramID
 
-	rows, err := db.Query(`
-		SELECT			
-			t.id,
-			t.status,
-			t.to_user,
-			t.from_user
-		FROM tasks t
-		WHERE 
-			t.id=?
-			AND (t.to_user=? OR t.from_user=?)`, c.TaskID, tguID, tguID)
+	rows, err := dbase.SelectTasksByIDUserTelegramID(cfg, c.TaskID, tguID)
+	//rows, err := db.Query(`
+	//	SELECT
+	//		t.id,
+	//		t.status,
+	//		t.to_user,
+	//		t.from_user
+	//	FROM tasks t
+	//	WHERE
+	//		t.id=?
+	//		AND (t.to_user=? OR t.from_user=?)`, c.TaskID, tguID, tguID)
 	if err != nil {
 		cbConfig.Text = "Something went wrong while checking current Task status"
 		cbConfig.ShowAlert = true
@@ -3220,7 +3179,7 @@ func addComment(c *models.UserCache) {
 	}
 
 	if rows.Next() {
-		err := rows.Scan(&t.ID, &t.Status, &t.ToUser, &t.FromUser)
+		err := dbase.ScanTask(rows, &t)
 		if err != nil {
 			log.Println(err)
 		}

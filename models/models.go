@@ -17,7 +17,7 @@ type Config struct {
 		Name string `json:"name"`
 		User string `json:"user"`
 		Password string `json:"password"`
-	} `json:"database"`
+	} `json:"dbase"`
 	DB *sql.DB
 }
 
@@ -50,6 +50,7 @@ type DbUsers struct {
 	Status     string
 	ChangedBy  int
 	ChangedAt  NullTime
+	Comment string
 }
 
 type DbTasks struct {
@@ -59,9 +60,11 @@ type DbTasks struct {
 	Status      string
 	ChangedAt   NullTime
 	ChangedBy   int
-	Comments    string
 	Title       string
 	Description string
+	Comment     string
+	CommentedAt NullTime
+	CommnetedBy int
 	Images      string
 	Documents   string
 }

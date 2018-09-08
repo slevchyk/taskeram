@@ -1,8 +1,8 @@
-package database
+package dbase
 
 import (
 	"database/sql"
-	"github.com/slevchyk/taskeram/database/sqlite"
+	"github.com/slevchyk/taskeram/dbase/sqlite"
 	"github.com/slevchyk/taskeram/models"
 )
 
@@ -14,16 +14,14 @@ func ConnectDB(cfg models.Config) (*sql.DB, error) {
 	default:
 		return sqlite.ConntectDB(cfg)
 	}
-
 }
 
-func InitDB(db *sql.DB, cfg models.Config) {
+func InitDB(cfg models.Config) {
 
 	switch cfg.Database.Type {
 	case "sqlite":
-		sqlite.InitDB(db, cfg)
+		sqlite.InitDB(cfg.DB, cfg)
 	default:
-		sqlite.InitDB(db, cfg)
+		sqlite.InitDB(cfg.DB, cfg)
 	}
-
 }
