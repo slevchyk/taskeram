@@ -2076,8 +2076,9 @@ func handleNew(c *models.UserCache) {
 
 			createdAt := time.Now().UTC()
 
-			stmt, err := db.Prepare(`
-				INSERT INTO 'tasks'(from_user, to_user, status, changed_at, changed_by, title, description) VALUES(?,?,?,?,?,?,?) `)
+			stmt, err := dbase.InsertTask(cfg)
+			//stmt, err := db.Prepare(`
+			//	INSERT INTO 'tasks'(from_user, to_user, status, changed_at, changed_by, title, description) VALUES(?,?,?,?,?,?,?) `)
 			if err != nil {
 				c.NewTask.Step = models.NewTaskStepUser
 
@@ -2091,7 +2092,21 @@ func handleNew(c *models.UserCache) {
 				return
 			}
 
-			res, err := stmt.Exec(c.User.TelegramID, toUser.TelegramID, models.TaskStatusNew, createdAt, c.User.TelegramID, c.NewTask.Title, c.NewTask.Description)
+			nt := models.DbTasks{
+				FromUser: c.User.TelegramID,
+				ToUser:   toUser.TelegramID,
+				Status:   models.TaskStatusNew,
+				ChangedAt: models.NullTime{
+					Time:  createdAt,
+					Valid: true,
+				},
+				ChangedBy:   c.User.TelegramID,
+				Title:       c.NewTask.Title,
+				Description: c.NewTask.Description,
+			}
+
+			res, err := dbase.InsertTaskExec(stmt, nt)
+			//res, err := stmt.Exec(c.User.TelegramID, toUser.TelegramID, models.TaskStatusNew, createdAt, c.User.TelegramID, c.NewTask.Title, c.NewTask.Description)
 			if err != nil {
 				c.NewTask.Step = models.NewTaskStepUser
 
@@ -2433,7 +2448,8 @@ func newUserAdd(c *models.UserCache) {
 	}
 	rows.Close()
 
-	stmt, err := db.Prepare(`INSERT INTO users (tgid, first_name, last_name, status, changed_by, changed_at) values(?, ?, ?, ?, ?, ?)`)
+	stmt, err := dbase.InsertUser(cfg)
+	//stmt, err := db.Prepare(`INSERT INTO users (tgid, first_name, last_name, status, changed_by, changed_at) values(?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		cbConfig.Text = fmt.Sprintf("Dear, %s %s. sorry, somethings went wrong. Try make request later", c.User.FirstName, c.User.LastName)
 		_, err := bot.AnswerCallbackQuery(cbConfig)
@@ -2443,7 +2459,20 @@ func newUserAdd(c *models.UserCache) {
 		return
 	}
 
-	res, err := stmt.Exec(c.User.TelegramID, c.User.FirstName, c.User.LastName, models.UserRequested, c.User.TelegramID, time.Now().UTC())
+	nu := models.DbUsers{
+		TelegramID: c.User.TelegramID,
+		FirstName:  c.User.FirstName,
+		Status:     models.UserRequested,
+		Admin:      0,
+		ChangedBy:  c.User.TelegramID,
+		ChangedAt: models.NullTime{
+			Time:  time.Now(),
+			Valid: true,
+		},
+	}
+
+	res, err := dbase.InsertUserExec(stmt, nu)
+	//res, err := stmt.Exec(c.User.TelegramID, c.User.FirstName, c.User.LastName, models.UserRequested, c.User.TelegramID, time.Now().UTC())
 	if err != nil {
 		cbConfig.Text = fmt.Sprintf("Dear, %s %s. sorry, somethings went wrong. Try make request later", c.User.FirstName, c.User.LastName)
 		_, err := bot.AnswerCallbackQuery(cbConfig)
@@ -2789,7 +2818,6 @@ func changeStatus(c *models.UserCache, action string) {
 		updateTaskInlineKeyboard(c.ChatID, c.MessageID, c.TaskID, taskType, t.Status)
 		return
 	}
-
 
 	stmt, err := dbase.UpdateTaskStatus(cfg)
 	if err != nil {

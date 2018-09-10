@@ -188,3 +188,23 @@ func UpdateTaskComment(cfg models.Config) (*sql.Stmt, error) {
 		return  sqlite.UpdateTaskComment(cfg.DB)
 	}
 }
+
+func InsertUser(cfg models.Config) (*sql.Stmt, error) {
+
+	switch cfg.Database.Type {
+	case "sqlite":
+		return  sqlite.InsertUser(cfg.DB)
+	default:
+		return  sqlite.InsertUser(cfg.DB)
+	}
+}
+
+func InsertTask(cfg models.Config) (*sql.Stmt, error) {
+
+	switch cfg.Database.Type {
+	case "sqlite":
+		return  sqlite.InsertTask(cfg.DB)
+	default:
+		return  sqlite.InsertTask(cfg.DB)
+	}
+}

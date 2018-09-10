@@ -64,7 +64,7 @@ type DbTasks struct {
 	Description string
 	Comment     string
 	CommentedAt NullTime
-	CommnetedBy int
+	CommentedBy int
 	Images      string
 	Documents   string
 }

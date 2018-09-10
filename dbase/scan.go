@@ -10,7 +10,7 @@ func ScanUser(rows *sql.Rows, u *models.DbUsers) error {
 }
 
 func ScanTask(rows *sql.Rows, t *models.DbTasks) error {
-	return rows.Scan(&t.ID, &t.FromUser, &t.ToUser, &t.Status, &t.ChangedAt, &t.ChangedBy, &t.Title, &t.Description, &t.Comment, &t.CommentedAt, &t.CommnetedBy, &t.Images, &t.Documents)
+	return rows.Scan(&t.ID, &t.FromUser, &t.ToUser, &t.Status, &t.ChangedAt, &t.ChangedBy, &t.Title, &t.Description, &t.Comment, &t.CommentedAt, &t.CommentedBy, &t.Images, &t.Documents)
 }
 
 func ScanHistory(rows *sql.Rows, h *models.DbHistory) error {

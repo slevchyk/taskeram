@@ -25,8 +25,8 @@ func InitDB(db *sql.DB, cfg models.Config) {
 			'last_name' TEXT,
 			'admin' INTEGER DEFAULT 0,
 			'status' TEXT,
-			'changed_by' INTEGER DEFAULT 0,
 			'changed_at' DATE,
+			'changed_by' INTEGER DEFAULT 0,
 			'comment' TEXT DEFAULT '');`)
 	if err != nil {
 		log.Fatal(err)
