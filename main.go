@@ -3260,6 +3260,6 @@ func addComment(c *models.UserCache) {
 	msg.ParseMode = "HTML"
 	_, err = bot.Send(msg)
 	if err != nil {
-		log.Println(err)
+		log.Println(fmt.Errorf("bot.Send enter comment: %v", err))
 	}
 }
