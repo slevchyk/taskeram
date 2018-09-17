@@ -41,3 +41,25 @@ func UpdateTaskComment(db *sql.DB) (*sql.Stmt, error) {
 		WHERE
 			id=?;`)
 }
+
+func UpdateAuth(db *sql.DB) (*sql.Stmt, error) {
+
+	return db.Prepare(`
+		UPDATE 
+			auth
+		SET
+			approved=?
+		WHERE
+			token=?;`)
+}
+
+func UpdateSessionLastActivityByUuid(db *sql.DB) (*sql.Stmt, error) {
+
+	return db.Prepare(`
+		UPDATE 
+			sessions
+		SET
+			last_activity=?
+		WHERE
+			uuid=?;`)
+}

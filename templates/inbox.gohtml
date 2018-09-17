@@ -1,0 +1,56 @@
+{{ template "header"}}
+
+{{ template "navbar" .NavBar}}
+
+<div class="container">
+
+    {{.Tabs}}
+
+    <div class="row">
+        <table class="table table-striped">
+            <thead class="thead-dark">
+            <tr>
+                <th scope="col">#</th>
+                <th scope="col">from</th>
+                <th scope="col">status</th>
+                <th scope="col">title</th>
+                <th scope="col">description</th>
+            </tr>
+            </thead>
+
+        {{if .}}
+        {{/*{{$ID := .ID}}*/}}
+
+
+        {{range .Rows}}
+        {{/*{{if eq .Tasks.ID $ID}}*/}}
+            {{/*<form action="levels?action=update&id={{.Tasks.ID}}" method="post">*/}}
+                {{/*<td>{{.Number}}</td>*/}}
+                {{/*<td>*/}}
+                    {{/*<input type="text" class="form-control" name="name" id="name" required placeholder="name" value="{{.Tasks.FromUser}}">*/}}
+                {{/*</td>*/}}
+                {{/*<td>*/}}
+                    {{/*<input type="text" class="form-control" name="score" id="score" required placeholder="score" value="{{.Tasks.Title}}">*/}}
+                {{/*</td>*/}}
+                {{/*<td>*/}}
+                    {{/*<button type="submit" class="btn btn-outline-primary"><i class="fa fa-save"></i> Save</button>*/}}
+                {{/*</td>*/}}
+            {{/*</form>*/}}
+        {{/*{{else}}*/}}
+            <tr>
+                <td>{{.Number}}</td>
+                <td>{{.Tasks.FromUser}}</td>
+                <td>{{.Tasks.Status}}</td>
+                <td>{{.Tasks.Title}}</td>
+                <td>{{.Tasks.Description}}</td>
+                {{/*<td><a href="/levels?action=edit&id={{.Tasks.ID}}" class="btn btn-outline-info"><i class="fa fa-edit"></i> Edit</a></td>*/}}
+            </tr>
+        {{end}}
+        {{end}}
+        {{/*{{end}}*/}}
+
+        </table>
+    </div>
+</div>
+
+{{ template "footer" }}

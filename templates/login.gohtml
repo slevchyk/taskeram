@@ -1,0 +1,43 @@
+{{ template "header"}}
+
+<div class="container">
+    <div class="row">
+        <div class="col-sm-12 col-md-12">
+            <div class="row">
+                <div class="col-sm-12 col-md-6 mx-auto">
+                    <!-- form card login -->
+                    <div class="card rounded-0">
+                        <div class="card-header">
+                            <h3 class="mb-0">Login</h3>
+                        </div>
+                        <div class="card-body">
+                            <form method="post" class="form" role="form" enctype="multipart/form-data">
+                                <div class="form-group">
+                                     <label for="tgid">User:</label>
+                                     <select class="form-control" id="tgid" name="tdid">
+                                     {{range .Users}}
+                                        <option value={{.TelegramID}}>{{.FirstName}} {{.LastName}}</option>
+                                     {{end}}
+                                     </select>
+                                </div>
+                                <button type="submit" class="btn btn-primary float-right" id="btnLogin"><i class="fa fa-sign-in-alt"></i> Login</button>
+                            </form>
+                        </div>
+                        <!--/card-block-->
+                    </div>
+                    <!-- /form card login -->
+
+                </div>
+
+            </div>
+            <!--/row-->
+
+        </div>
+        <!--/col-->
+    </div>
+    <!--/row-->
+</div>
+<!--/container-->
+
+
+{{ template "footer" }}

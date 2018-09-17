@@ -14,8 +14,10 @@ func InsertUser(db *sql.DB) (*sql.Stmt, error)  {
 				status,				 
 				changed_at,
 				changed_by,
-				comment)
-		VALUES (?, ?, ?, ?, ?, ?. ?, ?)`)
+				comment,
+				userpic,
+				password)
+		VALUES (?, ?, ?, ?, ?, ?. ?, ?, ?, ?);`)
 }
 
 func InsertTask(db *sql.DB) (*sql.Stmt, error) {
@@ -35,5 +37,31 @@ func InsertTask(db *sql.DB) (*sql.Stmt, error) {
 				commented_by,
 				images,
 				documents)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?) `)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`)
+}
+
+func InsertAuth(db *sql.DB) (*sql.Stmt, error) {
+
+	return db.Prepare(`
+		INSERT INTO 
+			'auth' (
+				token,
+				expiry_date,
+				tgid,
+				approved)
+		VALUES (?, ?, ?, ?);`)
+}
+
+func InsertSession(db *sql.DB) (*sql.Stmt, error) {
+
+	return db.Prepare(`
+		INSERT INTO 
+			'sessions' (
+				uuid,
+				tgid,
+				started_at,
+				last_activity,
+				ip,
+				user_agent)
+		VALUES (?, ?, ?, ?, ?, ?);`)
 }

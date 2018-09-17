@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/slevchyk/taskeram/models"
 	"log"
 	"strconv"
@@ -10,7 +11,8 @@ import (
 
 func ConntectDB(cfg models.Config) (*sql.DB, error) {
 
-	db, err := sql.Open("sqlite3", "tasker.sqlite")
+	dbName := fmt.Sprintf("%v.sqlite", cfg.Database.Name)
+	db, err := sql.Open("sqlite3", dbName)
 
 	return db, err
 }
@@ -27,7 +29,8 @@ func InitDB(db *sql.DB, cfg models.Config) {
 			'status' TEXT,
 			'changed_at' DATE,
 			'changed_by' INTEGER DEFAULT 0,
-			'comment' TEXT DEFAULT '');`)
+			'comment' TEXT DEFAULT '',
+			'userpic' TEXT DEFAULT '');`)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -124,6 +127,26 @@ func InitDB(db *sql.DB, cfg models.Config) {
 		log.Fatal(err)
 	}
 
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS 'sessions' (
+				'id' INTEGER PRIMARY KEY AUTOINCREMENT,
+				'uuid' TEXT NOT NULL,
+				'tgid' INTEGER NOT NULL,
+				'started_at' DATE,
+				'last_activity' DATE,
+				'ip' TEXT DEFAULT '',
+				'user_agent' TEXT DEFAULT '');`)
+
+	if cfg.Telegram.AdminID == "" {
+		log.Fatal("Telegram Admin ID does not exist in config file")
+	}
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS 'auth' (
+				'id' INTEGER PRIMARY KEY AUTOINCREMENT,
+				'token' TEXT NOT NULL ,
+				'expiry_date' DATE NOT NULL,	
+				'tgid' INTEGER NOT NULL ,				
+				'approved' INTEGER DEFAULT 0);`)
+
 	if cfg.Telegram.AdminID == "" {
 		log.Fatal("Telegram Admin ID does not exist in config file")
 	}
@@ -171,7 +194,9 @@ func SelectUsersByTelegramID(db *sql.DB, tgid int) (*sql.Rows, error) {
 			u.status,
 			u.changed_by,
 			u.changed_at,
-			comment			
+			u.comment,
+			u.userpic,
+			u.password		
 		FROM 
 			users u
 		WHERE
@@ -192,7 +217,9 @@ func SelectUsersByStatus(db *sql.DB, status string) (*sql.Rows, error) {
 			u.status,
 			u.changed_by,
 			u.changed_at,
-			comment			
+			u.comment,
+			u.userpic,
+			u.password			
 		FROM 
 			users u
 		WHERE
@@ -213,7 +240,9 @@ func SelectUsersByTelegramIDStatus(db *sql.DB, tgid int, status string) (*sql.Ro
 			u.status,
 			u.changed_by,
 			u.changed_at,
-			comment			
+			u.comment,
+			u.userpic,
+			u.password	
 		FROM 
 			users u
 		WHERE
@@ -235,7 +264,9 @@ func SelectAdminUsers(db *sql.DB) (*sql.Rows, error) {
 			u.status,
 			u.changed_by,
 			u.changed_at,
-			comment			
+			u.comment,
+			u.userpic,
+			u.password			
 		FROM 
 			users u
 		WHERE
@@ -256,7 +287,9 @@ func SelectUsersForBan(db *sql.DB, tgid int) (*sql.Rows, error) {
 			u.status,
 			u.changed_by,
 			u.changed_at,
-			comment			
+			u.comment,
+			u.userpic,
+			u.password		
 		FROM 
 			users u
 		WHERE
@@ -278,7 +311,9 @@ func SelectUsersForUnban(db *sql.DB, tgid int) (*sql.Rows, error) {
 			u.status,
 			u.changed_by,
 			u.changed_at,
-			comment			
+			u.comment,
+			u.userpic,
+			u.password	
 		FROM 
 			users u
 		WHERE
@@ -416,4 +451,53 @@ func SelectComments(db *sql.DB, taskID int, tgid int) (*sql.Rows, error) {
 				OR t.to_user=?)		
 		ORDER BY 
 			c.date`, taskID, tgid, tgid)
+}
+
+func SelectAuthByToken(db *sql.DB, token string) (*sql.Rows, error) {
+
+	return db.Query(`
+		SELECT 
+			a.id,
+			a.token,
+			a.expiry_date,
+			a.tgid,
+			a.approved
+		FROM auth a
+		WHERE
+			token=?`, token)
+}
+
+func SelectSessions(db *sql.DB) (*sql.Rows, error) {
+
+	return db.Query(`
+		SELECT 
+			s.id,
+			s.uuid,
+			s.tgid,
+			s.started_at,
+			s.last_activity,
+			s.ip,
+			s.user_agent
+		FROM sessions s`)
+}
+
+func SelectUsersBySessionUUID(db *sql.DB, uuid string) (*sql.Rows, error) {
+
+	return db.Query(`
+		SELECT 
+			u.id,
+			u.tgid,			
+			u.first_name,
+			u.last_name,
+			u.admin,
+			u.status,
+			u.changed_by,
+			u.changed_at,
+			u.comment,
+			u.userpic,
+			u.password	
+		FROM sessions s
+			LEFT JOIN users u
+			ON s.tgid = u.tgid
+		WHERE s.uuid = ?;`, uuid)
 }

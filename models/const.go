@@ -25,6 +25,7 @@ const (
 	Close    = "Close"
 	Reject   = "Reject"
 	Comment  = "Comment"
+	Confirm = "Confirm"
 )
 
 const (

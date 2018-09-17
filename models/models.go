@@ -8,16 +8,16 @@ import (
 )
 
 type Config struct {
-	Telegram struct{
-		Token string `json:"token"`
+	Telegram struct {
+		Token   string `json:"token"`
 		AdminID string `json:"admin_id"`
 	} `json:"telegram"`
-	Database struct{
-		Type string `json:"type"`
-		Name string `json:"name"`
-		User string `json:"user"`
+	Database struct {
+		Type     string `json:"type"`
+		Name     string `json:"name"`
+		User     string `json:"user"`
 		Password string `json:"password"`
-	} `json:"dbase"`
+	} `json:"database"`
 	DB *sql.DB
 }
 
@@ -50,7 +50,9 @@ type DbUsers struct {
 	Status     string
 	ChangedBy  int
 	ChangedAt  NullTime
-	Comment string
+	Comment    string
+	Userpic    string
+	Password string
 }
 
 type DbTasks struct {
@@ -70,18 +72,18 @@ type DbTasks struct {
 }
 
 type DbTaskHistory struct {
-	ID       int
-	TaskID   int
-	UserID   int
-	Date     NullTime
-	Status   string
+	ID     int
+	TaskID int
+	UserID int
+	Date   NullTime
+	Status string
 }
 
 type DbTaskComments struct {
-	ID       int
-	TaskID   int
-	UserID   int
-	Date     NullTime
+	ID      int
+	TaskID  int
+	UserID  int
+	Date    NullTime
 	Comment string
 }
 
@@ -135,7 +137,7 @@ func (aa AllowedActions) Contains(s string) bool {
 }
 
 type Buttons struct {
-	Main		tgbotapi.KeyboardButton
+	Main      tgbotapi.KeyboardButton
 	Next      tgbotapi.KeyboardButton
 	Users     tgbotapi.KeyboardButton
 	Back      tgbotapi.KeyboardButton
@@ -173,4 +175,22 @@ type DbComment struct {
 	CDb DbTaskComments
 	TDb DbTasks
 	UDb DbUsers
+}
+
+type DbAuth struct {
+	ID int
+	Token string
+	ExpiryDate NullTime
+	TelegramID int
+	Approved int
+}
+
+type DbSessions struct {
+	ID int
+	UUID string
+	TelegramID int
+	StartedAt NullTime
+	LastActivity NullTime
+	IP string
+	UserAgent string
 }

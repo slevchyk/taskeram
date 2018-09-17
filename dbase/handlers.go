@@ -144,6 +144,38 @@ func SelectComments(cfg models.Config, taskID int, tgid int) (*sql.Rows, error) 
 	}
 }
 
+func SelectAuthByToken(cfg models.Config, token string) (*sql.Rows, error) {
+
+	switch cfg.Database.Type {
+	case "sqlite":
+		return  sqlite.SelectAuthByToken(cfg.DB, token)
+	default:
+		return  sqlite.SelectAuthByToken(cfg.DB, token)
+	}
+}
+
+func SelectSessions(cfg models.Config) (*sql.Rows, error) {
+
+	switch cfg.Database.Type {
+	case "sqlite":
+		return  sqlite.SelectSessions(cfg.DB)
+	default:
+		return  sqlite.SelectSessions(cfg.DB)
+	}
+}
+
+func SelectUsersBySessionUUID(cfg models.Config, uuid string) (*sql.Rows, error) {
+
+	switch cfg.Database.Type {
+	case "sqlite":
+		return  sqlite.SelectUsersBySessionUUID(cfg.DB, uuid)
+	default:
+		return  sqlite.SelectUsersBySessionUUID(cfg.DB, uuid)
+	}
+}
+
+
+
 //UpdateUserStatus - for changing user status. Uses 4 params
 //1. New user status
 //2. When status was changed
@@ -189,6 +221,32 @@ func UpdateTaskComment(cfg models.Config) (*sql.Stmt, error) {
 	}
 }
 
+//UpdateAuth is for add new comment to task. Uses 4 params
+//1. Approved (0 - false, 1 - true)
+//2. Token
+func UpdateAuth(cfg models.Config) (*sql.Stmt, error) {
+
+	switch cfg.Database.Type {
+	case "sqlite":
+		return  sqlite.UpdateAuth(cfg.DB)
+	default:
+		return  sqlite.UpdateAuth(cfg.DB)
+	}
+}
+
+//UpdateAuth is for add new comment to task. Uses 4 params
+//1. Last activity (time.Time)
+//2. session id
+func UpdateSessionLastActivityByUuid(cfg models.Config) (*sql.Stmt, error) {
+
+	switch cfg.Database.Type {
+	case "sqlite":
+		return  sqlite.UpdateSessionLastActivityByUuid(cfg.DB)
+	default:
+		return  sqlite.UpdateSessionLastActivityByUuid(cfg.DB)
+	}
+}
+
 func InsertUser(cfg models.Config) (*sql.Stmt, error) {
 
 	switch cfg.Database.Type {
@@ -206,5 +264,45 @@ func InsertTask(cfg models.Config) (*sql.Stmt, error) {
 		return  sqlite.InsertTask(cfg.DB)
 	default:
 		return  sqlite.InsertTask(cfg.DB)
+	}
+}
+
+func InsertAuth(cfg models.Config) (*sql.Stmt, error) {
+
+	switch cfg.Database.Type {
+	case "sqlite":
+		return  sqlite.InsertAuth(cfg.DB)
+	default:
+		return  sqlite.InsertAuth(cfg.DB)
+	}
+}
+
+func InsertSession(cfg models.Config) (*sql.Stmt, error) {
+
+	switch cfg.Database.Type {
+	case "sqlite":
+		return  sqlite.InsertSession(cfg.DB)
+	default:
+		return  sqlite.InsertSession(cfg.DB)
+	}
+}
+
+func DeleteAuthByToken(cfg models.Config) (*sql.Stmt, error) {
+
+	switch cfg.Database.Type {
+	case "sqlite":
+		return  sqlite.DeleteAuthByToken(cfg.DB)
+	default:
+		return  sqlite.DeleteAuthByToken(cfg.DB)
+	}
+}
+
+func DeleteSessionByID(cfg models.Config) (*sql.Stmt, error) {
+
+	switch cfg.Database.Type {
+	case "sqlite":
+		return  sqlite.DeleteSessionByID(cfg.DB)
+	default:
+		return  sqlite.DeleteSessionByID(cfg.DB)
 	}
 }

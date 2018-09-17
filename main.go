@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"log"
 	"os"
@@ -20,11 +21,18 @@ import (
 var (
 	cfg          models.Config
 	db           *sql.DB
+	tpl          *template.Template
 	bot          *tgbotapi.BotAPI
 	cache        map[int]*models.UserCache
 	taskRules    map[string]map[string]models.AllowedActions
 	actionStatus map[string]string
 	buttons      models.Buttons
+	lastSessionCleaned time.Time
+)
+
+const (
+	authSessionLengt = 60
+	sessionLenght = 300
 )
 
 func init() {
@@ -48,6 +56,10 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	tpl = template.Must(template.ParseGlob("templates/*.gohtml"))
+
+	lastSessionCleaned = time.Now()
 }
 
 func main() {
@@ -55,6 +67,8 @@ func main() {
 	defer db.Close()
 
 	initialization()
+
+	go startWebApp()
 
 	bot.Debug = false
 	log.Printf("Authorized on account %s", bot.Self.UserName)
@@ -65,6 +79,7 @@ func main() {
 
 	upd, _ := bot.GetUpdatesChan(ucfg)
 	// читаем обновления из канала
+
 	for {
 
 		update := <-upd
@@ -2384,7 +2399,16 @@ func handleCallbackQuery(c *models.UserCache) {
 
 			handleMain(c)
 		}
+	case models.Confirm:
+		if len(xs) == 2 {
+			authConfirm(c, xs[1])
+		}
+	case models.Cancel:
+		if len(xs) == 2 {
+			authCacnel(c, xs[1])
+		}
 	}
+
 }
 
 func newUserCancel(c *models.UserCache) {
@@ -2754,6 +2778,65 @@ func newUserAccpet(c *models.UserCache, ID string) {
 		log.Println(err)
 	}
 }
+
+func authConfirm(c *models.UserCache, token string) {
+
+	stmt, err := dbase.UpdateAuth(cfg)
+	if err != nil {
+		log.Println(err)
+	}
+
+	_, err = stmt.Exec(1, token)
+	if err != nil {
+		log.Println(err)
+	}
+
+	msgEdited := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, "Web application authentication passed")
+	msgEdited.ParseMode = "HTML"
+	_, err = bot.Send(msgEdited)
+	if err != nil {
+		log.Println(err)
+	}
+
+	var cbConfig tgbotapi.CallbackConfig
+
+	cbConfig.CallbackQueryID = c.CallbackID
+	cbConfig.Text = "Done"
+	_, err = bot.AnswerCallbackQuery(cbConfig)
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+func authCacnel(c *models.UserCache, token string) {
+
+	stmt, err := dbase.DeleteAuthByToken(cfg)
+	if err != nil {
+		log.Println(err)
+	}
+
+	_, err = stmt.Exec(token)
+	if err != nil {
+		log.Println(err)
+	}
+
+	msgEdited := tgbotapi.NewEditMessageText(c.ChatID, c.MessageID, "Web application authentication canceled")
+	msgEdited.ParseMode = "HTML"
+	_, err = bot.Send(msgEdited)
+	if err != nil {
+		log.Println(err)
+	}
+
+	var cbConfig tgbotapi.CallbackConfig
+
+	cbConfig.CallbackQueryID = c.CallbackID
+	cbConfig.Text = "Done"
+	_, err = bot.AnswerCallbackQuery(cbConfig)
+	if err != nil {
+		log.Println(err)
+	}
+}
+
 
 func changeStatus(c *models.UserCache, action string) {
 
