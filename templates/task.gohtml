@@ -1,0 +1,89 @@
+{{ template "header"}}
+
+{{ template "navbar" .NavBar}}
+
+<div class="container">
+    <div class="row">
+        <div class="col-sm-12 col-md-12">
+            <div class="row">
+                <div class="col-sm-12 col-md-6 mx-auto">
+                    <!-- form card teacher -->
+                    <div class="card rounded-0 shadow">
+                        <div class="card-header">
+                        {{$TaskID := .Task.ID}}
+                        {{if .Edit}}
+                            Editing Task #{{$TaskID}}
+                        {{else}}
+                            <h6 class="mb-0">New task</h6>
+                        {{end}}
+                        </div>
+                        <div class="card-body">
+                            {{if .Edit}}
+                                <form action="task?do=update&id={{$TaskID}}" class="form" enctype="multipart/form-data" method="post">
+                            {{else}}
+                                <form action="task?do=add" class="form" enctype="multipart/form-data" method="post">
+                            {{end}}
+
+                                <div class="form-group">
+                                    {{$ToUser := .Task.ToUser}}
+                                    <label for="toUser">To user</label>
+                                    <select class="form-control" id="toUser" name="toUser">
+                                        {{range .Users}}
+                                            <h2>{{.TelegramID}} - {{.FirstName}}</h2>
+                                            {{if eq .TelegramID $ToUser}}
+                                                <option selected="selected" value={{.TelegramID}}>{{.FirstName}} {{.LastName}}</option>
+                                            {{else}}
+                                                <option value={{.TelegramID}}>{{.FirstName}} {{.LastName}}</option>
+                                            {{end}}
+                                        {{end}}
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="title">Title</label>
+                                    <input type="text" class="form-control" id="title" required="" placeholder="enter a title..." name="title" {{if .Edit}}value="{{.Task.Title}}"{{end}}>
+                                </div>
+                                <div class="form-group">
+                                    <label for="score">Decription</label>
+                                    <textarea class="form-control" rows="8" id="description" required="" placeholder="enter a decription..." name="description">{{if .Edit}}{{.Task.Description}}{{end}}</textarea>
+                                </div>
+
+                            {{if eq .Edit true}}
+                                {{/*<div class="form-group">*/}}
+                                    {{/*<label for="dateCteated">Date created</label>*/}}
+                                    {{/*<input type="text" class="form-control-plaintext" readonly id="dateCteated" required="" placeholder="score..." name="dateCteated" value="{{.Question.DateCteated}}">*/}}
+                                {{/*</div>*/}}
+                            {{end}}
+
+                                <button type="submit" class="btn btn-primary float-right shadow" id="btnCreate">
+                                {{if .Edit}}
+                                    <i class="fa fa-save"></i> Save
+                                {{else}}
+                                    <i class="fa fa-user"></i> Create
+                                {{end}}
+                                </button>
+
+                                {{if eq .Edit true}}
+                                <div class="row">
+                                    {{range .Actions}}
+                                    <a href="/task?do=update&id={{$TaskID}}&status={{.Action}}" class="btn btn-light"> {{.Alias}}</a>
+                                    {{end}}
+                                </div>
+                                {{end}}
+                            </form>
+                        </div>
+                        <!--/card-block-->
+                    </div>
+                    <!-- /form card task -->
+                </div>
+                <!--/class="col-md-6 mx-auto"-->
+            </div>
+            <!--/row-->
+        </div>
+        <!--/col-->
+    </div>
+    <!--/row-->
+</div>
+<!--/container-->
+
+{{ template "footer"}}

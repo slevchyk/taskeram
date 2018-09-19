@@ -18,14 +18,34 @@ import (
 func startWebApp() {
 
 	http.Handle("/assets/", http.StripPrefix("/assets", http.FileServer(http.Dir("./assets"))))
-	http.HandleFunc("/", tasksHandler)
+	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/login", loginHandler)
 	http.HandleFunc("/auth", authHandler)
-	//http.HandleFunc("/logout", logoutHandler)
+	http.HandleFunc("/logout", logoutHandler)
 	http.HandleFunc("/tasks", tasksHandler)
+	http.HandleFunc("/task", taskHanlder)
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		panic(err)
+	}
+}
+
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+
+	var td models.TplIndex
+
+	loggedIn, user := alreadyLoggedIn(w, r)
+	if !loggedIn {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	}
+
+	td.NavBar.MainMenu = getMainMenu()
+	td.NavBar.LoggedIn = loggedIn
+	td.NavBar.User = user
+
+	err := tpl.ExecuteTemplate(w, "index.gohtml", td)
+	if err != nil {
+		log.Println(err)
 	}
 }
 
@@ -132,7 +152,7 @@ func authHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func loginHandler(w	 http.ResponseWriter, r *http.Request) {
+func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	var td models.TplLogin
 	var u models.DbUsers
@@ -239,23 +259,22 @@ func loginHandler(w	 http.ResponseWriter, r *http.Request) {
 
 func tasksHandler(w http.ResponseWriter, r *http.Request) {
 
+	loggedIn, user := alreadyLoggedIn(w, r)
+	if !loggedIn {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	}
+
 	var (
 		td   models.TplTasks
-		sr   []models.TaskRow
+		sr   []models.TasksRow
 		t    models.DbTasks
 		i    int
 		rows *sql.Rows
 		err  error
 	)
 
-	loggedIn, user := alreadyLoggedIn(w, r)
-
 	td.NavBar.LoggedIn = loggedIn
 	td.NavBar.User = user
-
-	if !loggedIn {
-		http.Redirect(w, r, "/login", http.StatusBadRequest)
-	}
 
 	taskStatus := r.FormValue("status")
 	taskStatus = strings.Title(taskStatus)
@@ -266,30 +285,30 @@ func tasksHandler(w http.ResponseWriter, r *http.Request) {
 	taskType := r.FormValue("type")
 	switch taskType {
 	case "inbox":
-		rows, err = dbase.SelectInboxTasks(cfg, 601192901, taskStatus)
+		rows, err = dbase.SelectInboxTasks(cfg, user.TelegramID, taskStatus)
 	case "sent":
-		rows, err = dbase.SelectSentTasks(cfg, 601192901, taskStatus)
+		rows, err = dbase.SelectSentTasks(cfg, user.TelegramID, taskStatus)
 	default:
-		rows, err = dbase.SelectInboxTasks(cfg, 601192901, taskStatus)
+		rows, err = dbase.SelectInboxTasks(cfg, user.TelegramID, taskStatus)
 	}
 
 	if err != nil {
 		log.Println(err)
 	}
 
-	if rows.Next() {
+	for rows.Next() {
 		err := dbase.ScanTask(rows, &t)
 		if err != nil {
 			log.Println(fmt.Errorf("Scan inbox task webapp: %v", err))
 		}
 
 		i++
-		sr = append(sr, models.TaskRow{Number: i, Tasks: t})
+		sr = append(sr, models.TasksRow{Number: i, Tasks: t})
 	}
 	rows.Close()
 
-	td.NavBar.MainMenu = getTasksMainMenu()
-	td.Tabs = template.HTML(getTabs(taskType, taskStatus))
+	td.NavBar.MainMenu = getMainMenu()
+	td.Tabs = template.HTML(getTasksTabs(taskType, taskStatus))
 	td.Rows = sr
 
 	err = tpl.ExecuteTemplate(w, "inbox.gohtml", td)
@@ -298,7 +317,212 @@ func tasksHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getTabs(taskType string, status string) string {
+func taskHanlder(w http.ResponseWriter, r *http.Request) {
+
+	var td models.TplTask
+	var t models.DbTasks
+	var u models.DbUsers
+
+	loggedIn, user := alreadyLoggedIn(w, r)
+	if !loggedIn {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	}
+
+	rows, err := dbase.SelectUsersByStatus(cfg, models.UserApprowed)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Selecting users for task. Err: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	for rows.Next() {
+		err := dbase.ScanUser(rows, &u)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Scaning users for task. Err: %v", err), http.StatusInternalServerError)
+			return
+		}
+		td.Users = append(td.Users, u)
+	}
+	rows.Close()
+
+	td.Edit = false
+
+	do := r.FormValue("do")
+	switch do {
+	case "add":
+
+		t.FromUser = user.TelegramID
+
+		tgid, err := strconv.Atoi(r.FormValue("toUser"))
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Adding new task. Converting user tg id to int. Err: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		u = dbase.GetUserByTelegramID(cfg, tgid)
+		if u.ID == 0 {
+			http.Error(w, fmt.Sprintf("Adding new task. Can't find any user by tg id."), http.StatusInternalServerError)
+			return
+		}
+
+		t.ToUser = tgid
+		t.Status = models.TaskStatusNew
+		t.ChangedAt.Time = time.Now().UTC()
+		t.ChangedBy = user.TelegramID
+		t.Title = r.FormValue("title")
+		t.Description = r.FormValue("description")
+
+		stmt, err := dbase.InsertTask(cfg)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Adding new task. Inserting new task. Err: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		res, err := dbase.InsertTaskExec(stmt, t)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Adding new task. Inserting (commit) new task. Err: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		newTaskID, err := res.LastInsertId()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Adding new task. Sql result (new task id). Err: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		informNewTask(newTaskID, t, user, u)
+		http.Redirect(w, r, fmt.Sprintf("/tasks?type=sent&status=%v", models.TaskStatusNew), http.StatusSeeOther)
+	case "update":
+
+		var t models.DbTasks
+
+		taskIDValue := r.FormValue("id")
+		if taskIDValue == "" {
+			return
+		}
+
+		taskID, err := strconv.Atoi(taskIDValue)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Updating task. Can't convert task id to int. Err: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		rows, err := dbase.SelectTasksByIDUserTelegramID(cfg, taskID, user.TelegramID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Updating new task. Selecting task by id. Err: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		if rows.Next() {
+			err := dbase.ScanTask(rows, &t)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Updating new task. Scaning task. Err: %v", err), http.StatusInternalServerError)
+				return
+			}
+		} else {
+			return
+		}
+		rows.Close()
+
+		//встановимо тип задачі
+		var taskType string
+		if t.ToUser == user.TelegramID {
+			taskType = "Inbox"
+		} else {
+			taskType = "Sent"
+		}
+
+		//для значення "status" перетворимо у верхній регістр першу літеру так як в нас заведено в константах
+		newStatus := strings.Title(r.FormValue("status"))
+
+		//якщо при поновленні змігється статус
+		if newStatus != "" {
+			//перевіримо чи новий статус доступний для цієї задачі
+			rule := taskRules[taskType][t.Status]
+			if !rule.Contains(newStatus) {
+				http.Redirect(w, r, "/", http.StatusNotFound)
+			}
+
+			t.Status = newStatus
+			t.ChangedAt.Time = time.Now().UTC()
+			t.ChangedBy = user.TelegramID
+
+			stmt, err := dbase.UpdateTaskStatus(cfg)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			_, err = dbase.UpdateTaskStatusExec(stmt, t)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+	default:
+
+		var t models.DbTasks
+
+		taskIDValue := r.FormValue("id")
+		if taskIDValue == "" {
+			break
+		}
+
+		td.Edit = true
+
+		taskID, err := strconv.Atoi(taskIDValue)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Updating task. Can't convert task id to int. Err: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		rows, err := dbase.SelectTasksByIDUserTelegramID(cfg, taskID, user.TelegramID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Updating new task. Selecting task by id. Err: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		if rows.Next() {
+			err := dbase.ScanTask(rows, &t)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Updating new task. Scaning task. Err: %v", err), http.StatusInternalServerError)
+				return
+			}
+		} else {
+			return
+		}
+		rows.Close()
+
+		var taskType string
+
+		if t.ToUser == user.TelegramID {
+			taskType = "Inbox"
+		} else {
+			taskType = "Sent"
+		}
+
+		rule := taskRules[taskType][t.Status]
+		for _, val := range rule {
+			td.Actions = append(td.Actions, models.TplActions{
+				Action: strings.ToLower(val),
+				Alias:  val,
+			})
+		}
+
+		td.Task = t
+	}
+
+	td.NavBar.LoggedIn = loggedIn
+	td.NavBar.User = user
+	td.NavBar.MainMenu = getMainMenu()
+
+	err = tpl.ExecuteTemplate(w, "task.gohtml", td)
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+func getTasksTabs(taskType string, status string) string {
 
 	if status == "" {
 		status = models.TaskStatusNew
@@ -336,9 +560,17 @@ func isStatusActive(currentStatus string, status string) string {
 	return ""
 }
 
-func getTasksMainMenu() []models.TplMainMenu {
+func getMainMenu() []models.TplMainMenu {
 
 	var mm []models.TplMainMenu
+
+	mm = append(mm, struct {
+		Link  string
+		Alias string
+	}{
+		Link:  "/task",
+		Alias: "New",
+	})
 
 	mm = append(mm, struct {
 		Link  string
@@ -359,35 +591,41 @@ func getTasksMainMenu() []models.TplMainMenu {
 	return mm
 }
 
+func logoutHandler(w http.ResponseWriter, r *http.Request) {
 
-//func logoutHandler(w http.ResponseWriter, r *http.Request) {
-//
-//	if !alreadyLoggedIn(w, r) {
-//		http.Redirect(w, r, "/", http.StatusSeeOther)
-//		return
-//	}
-//
-//	c, err := r.Cookie("session")
-//	if err != nil {
-//		http.Redirect(w, r, "/", http.StatusSeeOther)
-//		return
-//	}
-//
-//	sessionID := c.Value
-//	_, err = db.Query(dbase.DeleteSessionByUUID(), sessionID)
-//	if err != nil {
-//		panic(err)
-//	}
-//
-//	c.MaxAge = -1
-//	http.SetCookie(w, c)
-//
-//	http.Redirect(w, r, "/", http.StatusSeeOther)
-//}
+	loggedIn, _ := alreadyLoggedIn(w, r)
+	if !loggedIn {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	c, err := r.Cookie("session")
+	if err != nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	sessionUUID := c.Value
+	stmt, err := dbase.DeleteSessionByUUID(cfg)
+	if err != nil {
+		log.Println(fmt.Errorf("Can't get Delete session stmt. %v", err))
+	}
+
+	_, err = stmt.Exec(sessionUUID)
+	if err != nil {
+		log.Println(fmt.Errorf("Can't Delete session UUID: %v. %v", sessionUUID, err))
+	}
+
+	c.MaxAge = -1
+	http.SetCookie(w, c)
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
 
 func alreadyLoggedIn(w http.ResponseWriter, r *http.Request) (bool, models.DbUsers) {
 
 	var u models.DbUsers
+	ok := false
 
 	if time.Now().Sub(lastSessionCleaned) > (time.Duration(sessionLenght) * time.Second) {
 		go cleanSession()
@@ -395,19 +633,19 @@ func alreadyLoggedIn(w http.ResponseWriter, r *http.Request) (bool, models.DbUse
 
 	c, err := r.Cookie("session")
 	if err != nil {
-		return false, u
+		return ok, u
 	}
 
 	sessionUUID := c.Value
 
 	stmt, err := dbase.UpdateSessionLastActivityByUuid(cfg)
 	if err != nil {
-		return false, u
+		return ok, u
 	}
 
 	_, err = stmt.Exec(time.Now().UTC(), sessionUUID)
 	if err != nil {
-		return false, u
+		return ok, u
 	}
 
 	rows, err := dbase.SelectUsersBySessionUUID(cfg, sessionUUID)
@@ -416,13 +654,12 @@ func alreadyLoggedIn(w http.ResponseWriter, r *http.Request) (bool, models.DbUse
 		panic(err)
 	}
 
-	ok := false
 	if rows.Next() {
-		ok = true
 		err := dbase.ScanUser(rows, &u)
 		if err != nil {
-			return false, u
+			return ok, u
 		}
+		ok = true
 	}
 	rows.Close()
 
@@ -446,7 +683,7 @@ func cleanSession() {
 		err = dbase.ScanSession(rows, &s)
 		if err == nil {
 			if time.Now().Sub(s.LastActivity.Time) > (time.Duration(sessionLenght) * time.Second) {
-				stmt, err := dbase.DeleteSessionByID(cfg)
+				stmt, err := dbase.DeleteSessionByUUID(cfg)
 				if err != nil {
 					log.Println()
 					continue

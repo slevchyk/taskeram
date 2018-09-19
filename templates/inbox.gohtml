@@ -11,6 +11,7 @@
             <thead class="thead-dark">
             <tr>
                 <th scope="col">#</th>
+                <th scope="col">task</th>
                 <th scope="col">from</th>
                 <th scope="col">status</th>
                 <th scope="col">title</th>
@@ -39,6 +40,7 @@
         {{/*{{else}}*/}}
             <tr>
                 <td>{{.Number}}</td>
+                <td>{{.Tasks.ID}}</td>
                 <td>{{.Tasks.FromUser}}</td>
                 <td>{{.Tasks.Status}}</td>
                 <td>{{.Tasks.Title}}</td>

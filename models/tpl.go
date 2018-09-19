@@ -13,8 +13,8 @@ type TplNavBar struct {
 	MainMenu []TplMainMenu
 }
 
-//TaskRow is a part of TplTasks struct for levels.gohtml
-type TaskRow struct {
+//TasksRow is a part of TplTasks struct for levels.gohtml
+type TasksRow struct {
 	Number int
 	Tasks DbTasks
 }
@@ -23,9 +23,26 @@ type TaskRow struct {
 type TplTasks struct {
 	NavBar TplNavBar
 	Tabs template.HTML
-	Rows []TaskRow
+	Rows []TasksRow
 }
 
 type TplLogin struct {
 	Users []DbUsers
+}
+
+type TplActions struct {
+	Action string
+	Alias string
+}
+
+type TplTask struct {
+	NavBar TplNavBar
+	Edit bool
+	Task DbTasks
+	Actions []TplActions
+	Users []DbUsers
+}
+
+type TplIndex struct {
+	NavBar TplNavBar
 }

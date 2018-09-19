@@ -94,6 +94,16 @@ func SelectUsersForUnban(cfg models.Config, tgid int) (*sql.Rows, error) {
 	}
 }
 
+func SelectTasksByID(cfg models.Config, taskID int) (*sql.Rows, error) {
+
+	switch cfg.Database.Type {
+	case "sqlite":
+		return  sqlite.SelectTasksByID(cfg.DB, taskID)
+	default:
+		return  sqlite.SelectTasksByID(cfg.DB, taskID)
+	}
+}
+
 func SelectTasksByIDUserTelegramID(cfg models.Config, taskID int, tgid int) (*sql.Rows, error) {
 
 	switch cfg.Database.Type {
@@ -297,12 +307,12 @@ func DeleteAuthByToken(cfg models.Config) (*sql.Stmt, error) {
 	}
 }
 
-func DeleteSessionByID(cfg models.Config) (*sql.Stmt, error) {
+func DeleteSessionByUUID(cfg models.Config) (*sql.Stmt, error) {
 
 	switch cfg.Database.Type {
 	case "sqlite":
-		return  sqlite.DeleteSessionByID(cfg.DB)
+		return  sqlite.DeleteSessionByUUID(cfg.DB)
 	default:
-		return  sqlite.DeleteSessionByID(cfg.DB)
+		return  sqlite.DeleteSessionByUUID(cfg.DB)
 	}
 }

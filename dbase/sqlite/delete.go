@@ -11,11 +11,11 @@ func DeleteAuthByToken(db *sql.DB) (*sql.Stmt, error)  {
 			token=?;`)
 }
 
-func DeleteSessionByID(db *sql.DB) (*sql.Stmt, error)  {
+func DeleteSessionByUUID(db *sql.DB) (*sql.Stmt, error)  {
 
 	return db.Prepare(`
 		DELETE 
 		FROM sessions
 		WHERE
-			id=?;`)
+			uuid=?;`)
 }

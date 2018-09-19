@@ -2135,7 +2135,7 @@ func handleNew(c *models.UserCache) {
 				return
 			}
 
-			taskID, err := res.LastInsertId()
+			newTaskID, err := res.LastInsertId()
 			if err != nil {
 				c.NewTask.Step = models.NewTaskStepUser
 
@@ -2149,32 +2149,34 @@ func handleNew(c *models.UserCache) {
 				return
 			}
 
-			reply := fmt.Sprintf(`<b>Task #%v</b>
-				To user: <a href="tg://user?id=%v">%v %v</a>
-				Title: %v
-				Description: %v`, taskID, toUser.TelegramID, toUser.FirstName, toUser.LastName, c.NewTask.Title, c.NewTask.Description)
+			informNewTask(newTaskID, nt, c.User, *toUser)
 
-			msg := tgbotapi.NewMessage(c.ChatID, reply)
-			msg.ParseMode = "HTML"
-			_, err = bot.Send(msg)
-			if err != nil {
-				log.Println(err)
-			}
-
-			if c.User.TelegramID != toUser.TelegramID {
-				reply = fmt.Sprintf(`<b>You have new Task #%v</b>				
-				Title: %v
-				Description: %v
-
-				Task manager: <a href="tg://user?id=%v">%v %v</a>
-				Created at: %v`, taskID, c.NewTask.Title, c.NewTask.Description, c.User.ID, c.User.FirstName, c.User.LastName, createdAt)
-				msg = tgbotapi.NewMessage(int64(toUser.TelegramID), reply)
-				msg.ParseMode = "HTML"
-				_, err := bot.Send(msg)
-				if err != nil {
-					fmt.Println(err)
-				}
-			}
+			//reply := fmt.Sprintf(`<b>Task #%v</b>
+			//	To user: <a href="tg://user?id=%v">%v %v</a>
+			//	Title: %v
+			//	Description: %v`, newTaskID, toUser.TelegramID, toUser.FirstName, toUser.LastName, c.NewTask.Title, c.NewTask.Description)
+			//
+			//msg := tgbotapi.NewMessage(c.ChatID, reply)
+			//msg.ParseMode = "HTML"
+			//_, err = bot.Send(msg)
+			//if err != nil {
+			//	log.Println(err)
+			//}
+			//
+			//if c.User.TelegramID != toUser.TelegramID {
+			//	reply = fmt.Sprintf(`<b>You have new Task #%v</b>
+			//	Title: %v
+			//	Description: %v
+			//
+			//	Task manager: <a href="tg://user?id=%v">%v %v</a>
+			//	Created at: %v`, newTaskID, c.NewTask.Title, c.NewTask.Description, c.User.ID, c.User.FirstName, c.User.LastName, createdAt)
+			//	msg = tgbotapi.NewMessage(int64(toUser.TelegramID), reply)
+			//	msg.ParseMode = "HTML"
+			//	_, err := bot.Send(msg)
+			//	if err != nil {
+			//		fmt.Println(err)
+			//	}
+			//}
 
 			c.NewTask = &models.Task{}
 			c.CurrentMenu = models.MenuMain
@@ -3344,5 +3346,35 @@ func addComment(c *models.UserCache) {
 	_, err = bot.Send(msg)
 	if err != nil {
 		log.Println(fmt.Errorf("bot.Send enter comment: %v", err))
+	}
+}
+
+func informNewTask(newTaskID int64, task models.DbTasks, fromUser models.DbUsers, toUser models.DbUsers)  {
+
+	reply := fmt.Sprintf(`<b>Task #%v</b>
+				To user: <a href="tg://user?id=%v">%v %v</a>
+				Title: %v
+				Description: %v`, newTaskID, toUser.TelegramID, toUser.FirstName, toUser.LastName, task.Title, task.Description)
+
+	msg := tgbotapi.NewMessage(int64(fromUser.TelegramID), reply)
+	msg.ParseMode = "HTML"
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Println(err)
+	}
+
+	if fromUser.TelegramID != toUser.TelegramID {
+		reply = fmt.Sprintf(`<b>You have new Task #%v</b>				
+				Title: %v
+				Description: %v
+
+				Task manager: <a href="tg://user?id=%v">%v %v</a>
+				Created at: %v`, newTaskID, task.Title, task.Description, fromUser.TelegramID, fromUser.FirstName, fromUser.LastName, task.ChangedAt)
+		msg = tgbotapi.NewMessage(int64(toUser.TelegramID), reply)
+		msg.ParseMode = "HTML"
+		_, err := bot.Send(msg)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }

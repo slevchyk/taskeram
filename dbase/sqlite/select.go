@@ -323,6 +323,30 @@ func SelectUsersForUnban(db *sql.DB, tgid int) (*sql.Rows, error) {
 				u.id`, models.UserBanned, tgid)
 }
 
+func SelectTasksByID(db *sql.DB, taskID int) (*sql.Rows, error) {
+
+	return db.Query(`
+		SELECT
+			t.ID,
+			t.from_user,
+			t.to_user,
+			t.status,
+			t.changed_at,
+			t.changed_by,
+			t.title,
+			t.description,
+			t.comment,
+			t.commented_at,
+			t.commented_by,
+			t.images,
+			t.documents			
+		FROM tasks t
+		WHERE
+			t.id=?
+		ORDER BY
+			t.id`, taskID)
+}
+
 func SelectTasksByIDUserTelegramID(db *sql.DB, taskID int, tgid int) (*sql.Rows, error) {
 
 	return db.Query(`
