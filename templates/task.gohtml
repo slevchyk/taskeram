@@ -2,77 +2,117 @@
 
 {{ template "navbar" .NavBar}}
 
+{{$TaskID := .Task.ID}}
+
 <div class="container">
     <div class="row">
         <div class="col-sm-12 col-md-12">
             <div class="row">
-                <div class="col-sm-12 col-md-6 mx-auto">
+                <div class="col-sm-12 col-md-10 col-lg-8 mx-auto">
                     <!-- form card teacher -->
                     <div class="card rounded-0 shadow">
-                        <div class="card-header">
-                        {{$TaskID := .Task.ID}}
                         {{if .Edit}}
-                            Editing Task #{{$TaskID}}
-                        {{else}}
-                            <h6 class="mb-0">New task</h6>
-                        {{end}}
-                        </div>
-                        <div class="card-body">
-                            {{if .Edit}}
-                                <form action="task?do=update&id={{$TaskID}}" class="form" enctype="multipart/form-data" method="post">
-                            {{else}}
-                                <form action="task?do=add" class="form" enctype="multipart/form-data" method="post">
-                            {{end}}
+                            <div class="card-header">
+                                <h6 class="mb-0">Task #{{$TaskID}} - {{.Task.Status}}</h6>
+                            </div>
 
+                            <div class="card-body">
                                 <div class="form-group">
-                                    {{$ToUser := .Task.ToUser}}
                                     <label for="toUser">To user</label>
-                                    <select class="form-control" id="toUser" name="toUser">
-                                        {{range .Users}}
-                                            <h2>{{.TelegramID}} - {{.FirstName}}</h2>
-                                            {{if eq .TelegramID $ToUser}}
-                                                <option selected="selected" value={{.TelegramID}}>{{.FirstName}} {{.LastName}}</option>
-                                            {{else}}
-                                                <option value={{.TelegramID}}>{{.FirstName}} {{.LastName}}</option>
-                                            {{end}}
-                                        {{end}}
-                                    </select>
+                                    <input type="text" class="form-control" disabled id="toUser" value="{{.Task.ToUser}}">
                                 </div>
 
                                 <div class="form-group">
                                     <label for="title">Title</label>
-                                    <input type="text" class="form-control" id="title" required="" placeholder="enter a title..." name="title" {{if .Edit}}value="{{.Task.Title}}"{{end}}>
+                                    <input type="text" class="form-control" disabled id="title" value="{{.Task.Description}}">
                                 </div>
+
                                 <div class="form-group">
-                                    <label for="score">Decription</label>
-                                    <textarea class="form-control" rows="8" id="description" required="" placeholder="enter a decription..." name="description">{{if .Edit}}{{.Task.Description}}{{end}}</textarea>
+                                    <label for="description">Description</label>
+                                    <textarea class="form-control" rows="4" id="description" disabled>{{.Task.Title}}</textarea>
                                 </div>
 
-                            {{if eq .Edit true}}
-                                {{/*<div class="form-group">*/}}
-                                    {{/*<label for="dateCteated">Date created</label>*/}}
-                                    {{/*<input type="text" class="form-control-plaintext" readonly id="dateCteated" required="" placeholder="score..." name="dateCteated" value="{{.Question.DateCteated}}">*/}}
-                                {{/*</div>*/}}
-                            {{end}}
-
-                                <button type="submit" class="btn btn-primary float-right shadow" id="btnCreate">
-                                {{if .Edit}}
-                                    <i class="fa fa-save"></i> Save
-                                {{else}}
-                                    <i class="fa fa-user"></i> Create
+                                {{if ne .Task.Comment ""}}
+                                    <div class="form-group">
+                                        <label for="comments">Commented by {{.Task.CommentedBy}} at {{.Task.CommentedAt.Time}}</label>
+                                        <textarea class="form-control" rows="2" id="comments" disabled>{{.Task.Comment}}</textarea>
+                                    </div>
                                 {{end}}
-                                </button>
 
-                                {{if eq .Edit true}}
-                                <div class="row">
+                                <div class="modal-footer">
                                     {{range .Actions}}
-                                    <a href="/task?do=update&id={{$TaskID}}&status={{.Action}}" class="btn btn-light"> {{.Alias}}</a>
+                                        {{if eq .Action "start"}}
+                                            <button onClick="setTaskStatusStarted({{$TaskID}});" type="button" class="btn btn-light">
+                                                {{.Alias}}
+                                            </button>
+                                        {{end}}
+
+                                        {{if eq .Action "complete"}}
+                                            <button onClick="setTaskStatusCompleted({{$TaskID}});" type="button" class="btn btn-light">
+                                                {{.Alias}}
+                                            </button>
+                                        {{end}}
+
+                                        {{if eq .Action "reject"}}
+                                            <button onClick="setTaskStatusRejected({{$TaskID}});" type="button" class="btn btn-light">
+                                                {{.Alias}}
+                                            </button>
+                                        {{end}}
+
+                                        {{if eq .Action "close"}}
+                                            <button onClick="setTaskStatusClosed({{$TaskID}});" type="button" class="btn btn-light">
+                                                {{.Alias}}
+                                            </button>
+                                        {{end}}
+
+                                        {{if eq .Action "history"}}
+                                            <button onClick="getHistory({{$TaskID}}, 'pTaskHistory');" type="button" class="btn btn-light" data-toggle="modal" data-target="#historyModal">
+                                                {{.Alias}}
+                                            </button>
+                                        {{end}}
                                     {{end}}
                                 </div>
-                                {{end}}
-                            </form>
-                        </div>
-                        <!--/card-block-->
+
+                            </div>
+                            <!--/card-block-->
+
+                        {{else}} <!--.Edit-->
+
+                            <div class="card-header">
+                                <h6 class="mb-0">New task</h6>
+                            </div>
+
+                            <div class="card-body">
+                                <form action="task?do=add" class="form" enctype="multipart/form-data" method="post">
+
+                                    <div class="form-group">
+                                        <label for="toUser">To user</label>
+                                        <select class="form-control" id="toUser" name="toUser">
+                                            {{range .Users}}
+                                                <h2>{{.TelegramID}} - {{.FirstName}}</h2>
+                                                <option value={{.TelegramID}}>{{.FirstName}} {{.LastName}}</option>
+                                            {{end}}
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="title">Title</label>
+                                        <input type="text" class="form-control" id="title" required="" placeholder="enter a title..." name="title">
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="description">Description</label>
+                                        <textarea class="form-control" rows="4" id="description" required="" placeholder="enter a description..." name="description"></textarea>
+                                    </div>
+
+                                    <button type="submit" class="btn btn-primary float-right shadow" id="btnCreate">
+                                        <i class="fa fa-save"></i> Save
+                                    </button>
+
+                                </form>
+                            </div>
+                            <!--/card-block-->
+                        {{end}} <!--.Edit-->
                     </div>
                     <!-- /form card task -->
                 </div>
@@ -85,5 +125,25 @@
     <!--/row-->
 </div>
 <!--/container-->
+
+<!-- Modal -->
+<div class="modal fade" id="historyModal" tabindex="-1" role="dialog" aria-labelledby="historyModalTitle" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="historyModalTitle">History of Task #{{$TaskID}}</h5>
+                {{/*<button type="button" class="close" data-dismiss="modal" aria-label="Close">*/}}
+                    {{/*<span aria-hidden="true">&times;</span>*/}}
+                {{/*</button>*/}}
+            </div>
+            <div class="modal-body">
+                <p id="pTaskHistory"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 {{ template "footer"}}

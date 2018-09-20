@@ -20,36 +20,17 @@
             </thead>
 
         {{if .}}
-        {{/*{{$ID := .ID}}*/}}
-
-
-        {{range .Rows}}
-        {{/*{{if eq .Tasks.ID $ID}}*/}}
-            {{/*<form action="levels?action=update&id={{.Tasks.ID}}" method="post">*/}}
-                {{/*<td>{{.Number}}</td>*/}}
-                {{/*<td>*/}}
-                    {{/*<input type="text" class="form-control" name="name" id="name" required placeholder="name" value="{{.Tasks.FromUser}}">*/}}
-                {{/*</td>*/}}
-                {{/*<td>*/}}
-                    {{/*<input type="text" class="form-control" name="score" id="score" required placeholder="score" value="{{.Tasks.Title}}">*/}}
-                {{/*</td>*/}}
-                {{/*<td>*/}}
-                    {{/*<button type="submit" class="btn btn-outline-primary"><i class="fa fa-save"></i> Save</button>*/}}
-                {{/*</td>*/}}
-            {{/*</form>*/}}
-        {{/*{{else}}*/}}
-            <tr>
-                <td>{{.Number}}</td>
-                <td>{{.Tasks.ID}}</td>
-                <td>{{.Tasks.FromUser}}</td>
-                <td>{{.Tasks.Status}}</td>
-                <td>{{.Tasks.Title}}</td>
-                <td>{{.Tasks.Description}}</td>
-                {{/*<td><a href="/levels?action=edit&id={{.Tasks.ID}}" class="btn btn-outline-info"><i class="fa fa-edit"></i> Edit</a></td>*/}}
-            </tr>
+            {{range .Rows}}
+                <tr>
+                    <td>{{.Number}}</td>
+                    <td><a href="/task?id={{.Tasks.ID}}">{{.Tasks.ID}}</a></td>
+                    <td>{{.Tasks.FromUser}}</td>
+                    <td>{{.Tasks.Status}}</td>
+                    <td>{{.Tasks.Title}}</td>
+                    <td>{{.Tasks.Description}}</td>
+                </tr>
+            {{end}}
         {{end}}
-        {{end}}
-        {{/*{{end}}*/}}
 
         </table>
     </div>

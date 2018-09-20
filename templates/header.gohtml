@@ -16,4 +16,23 @@
 
 <body class="padding-top-75">
 
+<script src="/assets/js/wasm_exec.js"></script>
+
+<script>
+    if (!WebAssembly.instantiateStreaming) { // polyfill
+        WebAssembly.instantiateStreaming = async (resp, importObject) => {
+            const source = await (await resp).arrayBuffer();
+            return await WebAssembly.instantiate(source, importObject);
+        };
+    }
+    const go = new Go();
+
+    let mod, inst;
+    WebAssembly.instantiateStreaming(fetch("/assets/js/lib.wasm"), go.importObject).then(async (result) => {
+        mod = result.module;
+        inst = result.instance;
+        await go.run(inst);
+    });
+</script>
+
 {{end}}

@@ -6,22 +6,30 @@ import (
 	"github.com/slevchyk/taskeram/models"
 )
 
+var db *sql.DB
+var dbType string
+
 func ConnectDB(cfg models.Config) (*sql.DB, error) {
 
-	switch cfg.Database.Type {
+	var err error
+	dbType = cfg.Database.Type
+
+	switch dbType {
 	case "sqlite":
-		return sqlite.ConntectDB(cfg)
+		db, err = sqlite.ConntectDB(cfg)
 	default:
-		return sqlite.ConntectDB(cfg)
+		db, err = sqlite.ConntectDB(cfg)
 	}
+
+	return db, err
 }
 
 func InitDB(cfg models.Config) {
 
-	switch cfg.Database.Type {
+	switch dbType {
 	case "sqlite":
-		sqlite.InitDB(cfg.DB, cfg)
+		sqlite.InitDB(db, cfg)
 	default:
-		sqlite.InitDB(cfg.DB, cfg)
+		sqlite.InitDB(db, cfg)
 	}
 }

@@ -47,6 +47,7 @@ func init() {
 	if err != nil {
 		log.Fatal("Can't connect to DB")
 	}
+	db = cfg.DB
 
 	if cfg.Telegram.Token == "" {
 		log.Fatal("Telegram token does not exist in config file")
@@ -147,24 +148,6 @@ func main() {
 			go serveUser(c)
 		}
 	}
-}
-
-func LoadConfiguration(file string) (models.Config, error) {
-	var config models.Config
-
-	cfgFile, err := ioutil.ReadFile(file)
-	if err != nil {
-		log.Println(err)
-		return config, err
-	}
-
-	err = json.Unmarshal(cfgFile, &config)
-	if err != nil {
-		log.Println(err)
-		return config, err
-	}
-
-	return config, nil
 }
 
 func initialization() {
@@ -3377,4 +3360,22 @@ func informNewTask(newTaskID int64, task models.DbTasks, fromUser models.DbUsers
 			fmt.Println(err)
 		}
 	}
+}
+
+func LoadConfiguration(file string) (models.Config, error) {
+	var config models.Config
+
+	cfgFile, err := ioutil.ReadFile(file)
+	if err != nil {
+		log.Println(err)
+		return config, err
+	}
+
+	err = json.Unmarshal(cfgFile, &config)
+	if err != nil {
+		log.Println(err)
+		return config, err
+	}
+
+	return config, nil
 }

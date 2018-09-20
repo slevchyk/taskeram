@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"github.com/satori/go.uuid"
 	"github.com/slevchyk/taskeram/dbase"
@@ -24,17 +25,88 @@ func startWebApp() {
 	http.HandleFunc("/logout", logoutHandler)
 	http.HandleFunc("/tasks", tasksHandler)
 	http.HandleFunc("/task", taskHanlder)
+	http.HandleFunc("/api/history", apiHistoryHandler)
+	http.HandleFunc("/api/updatetaskstatus", apiUpdateTaskStatusHandler)
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		panic(err)
 	}
+}
+func apiUpdateTaskStatusHandler(w http.ResponseWriter, r *http.Request) {
+
+	sessionUUID := r.FormValue("session")
+	taskIDValue := r.FormValue("id")
+	status := r.FormValue("status")
+
+	if sessionUUID == "" || taskIDValue == "" || status == "" {
+		return
+	}
+
+	loggedIn, user := alreadyLoggedIn(w, r, sessionUUID)
+	if !loggedIn {
+		return
+	}
+
+	taskID, err := strconv.Atoi(taskIDValue)
+	if err != nil {
+		return
+	}
+
+	stmt, err := dbase.UpdateTaskStatus(cfg)
+	if err != nil {
+		return
+	}
+
+	_, err = stmt.Exec(status, time.Now().UTC(), user.TelegramID, taskID)
+	if err != nil {
+		return
+	}
+}
+
+func apiHistoryHandler(w http.ResponseWriter, r *http.Request) {
+
+	sessionUUID := r.FormValue("session")
+	taskIDValue := r.FormValue("id")
+
+	if sessionUUID == "" || taskIDValue == "" {
+		return
+	}
+
+	loggedIn, user := alreadyLoggedIn(w, r, sessionUUID)
+	if !loggedIn {
+		return
+	}
+
+	taskID, err := strconv.Atoi(taskIDValue)
+	if err != nil {
+		return
+	}
+
+	rows, err := dbase.SelectHistory(cfg, taskID, user.TelegramID)
+	if err != nil {
+		return
+	}
+
+	var record models.DbHistory
+	var xs []models.DbHistory
+
+	for rows.Next() {
+		err := dbase.ScanHistory(rows, &record)
+		if err != nil {
+			return
+		}
+
+		xs = append(xs, record)
+	}
+
+	json.NewEncoder(w).Encode(xs)
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 	var td models.TplIndex
 
-	loggedIn, user := alreadyLoggedIn(w, r)
+	loggedIn, user := alreadyLoggedIn(w, r, "")
 	if !loggedIn {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	}
@@ -259,7 +331,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 func tasksHandler(w http.ResponseWriter, r *http.Request) {
 
-	loggedIn, user := alreadyLoggedIn(w, r)
+	loggedIn, user := alreadyLoggedIn(w, r, "")
 	if !loggedIn {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	}
@@ -323,7 +395,7 @@ func taskHanlder(w http.ResponseWriter, r *http.Request) {
 	var t models.DbTasks
 	var u models.DbUsers
 
-	loggedIn, user := alreadyLoggedIn(w, r)
+	loggedIn, user := alreadyLoggedIn(w, r, "")
 	if !loggedIn {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	}
@@ -434,7 +506,7 @@ func taskHanlder(w http.ResponseWriter, r *http.Request) {
 		//для значення "status" перетворимо у верхній регістр першу літеру так як в нас заведено в константах
 		newStatus := strings.Title(r.FormValue("status"))
 
-		//якщо при поновленні змігється статус
+		//якщо при поновленні змінюється статус
 		if newStatus != "" {
 			//перевіримо чи новий статус доступний для цієї задачі
 			rule := taskRules[taskType][t.Status]
@@ -593,7 +665,7 @@ func getMainMenu() []models.TplMainMenu {
 
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
 
-	loggedIn, _ := alreadyLoggedIn(w, r)
+	loggedIn, _ := alreadyLoggedIn(w, r, "")
 	if !loggedIn {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -622,13 +694,13 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func alreadyLoggedIn(w http.ResponseWriter, r *http.Request) (bool, models.DbUsers) {
+func alreadyLoggedIn(w http.ResponseWriter, r *http.Request, sessionUUID string) (bool, models.DbUsers) {
 
 	var u models.DbUsers
 	ok := false
 
 	if time.Now().Sub(lastSessionCleaned) > (time.Duration(sessionLenght) * time.Second) {
-		go cleanSession()
+		//go cleanSession()
 	}
 
 	c, err := r.Cookie("session")
@@ -636,7 +708,9 @@ func alreadyLoggedIn(w http.ResponseWriter, r *http.Request) (bool, models.DbUse
 		return ok, u
 	}
 
-	sessionUUID := c.Value
+	if sessionUUID == "" {
+		sessionUUID = c.Value
+	}
 
 	stmt, err := dbase.UpdateSessionLastActivityByUuid(cfg)
 	if err != nil {
