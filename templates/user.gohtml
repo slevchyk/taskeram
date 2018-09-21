@@ -1,0 +1,59 @@
+{{ template "header"}}
+
+{{ template "navbar" .NavBar}}
+
+<div class="container">
+    <div class="row">
+        <div class="col-sm-12 col-md-12">
+            <div class="row">
+                <div class="col-sm-12 col-md-10 col-lg-8 mx-auto">
+                    <!-- form card teacher -->
+                    <div class="card rounded-0 shadow padding-top-75">
+
+                        <div class="card-header">
+                            <div class="row justify-content-center">
+                                <img src="public/userpics/{{if eq .User.Userpic ""}}default.png{{else}}{{.User.ID}}/{{.User.Userpic}}{{end}}" class="userpic float-left" alt="user picture">
+                            </div>
+                            <h6 class="mb-0">User: {{.User.FirstName}} {{.User.LastName}}</h6>
+                        </div>
+
+                        <div class="card-body">
+                            <form action="user?do=add" class="form" enctype="multipart/form-data" method="post">
+
+                                <div class="form-group">
+                                    <label for="first-name">First name</label>
+                                    <input type="text" class="form-control" id="first-name" required="" placeholder="enter a first name..." name="firstName" value="{{.User.FirstName}}">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="last-name">Last name</label>
+                                    <input type="text" class="form-control" id="last-name" required="" placeholder="enter a last name..." name="lastName" value="{{.User.LastName}}">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="userpic">User picture</label>
+                                    <input type="file" class="form-control-file" id="userpic" name="userpic">
+                                </div>
+
+                                <button type="submit" class="btn btn-primary float-right shadow" id="btnCreate">
+                                    <i class="fa fa-save"></i> Save
+                                </button>
+
+                            </form>
+                        </div>
+                        <!--/card-block-->
+
+                    </div>
+                    <!-- /form card task -->
+                </div>
+                <!--/class="col-md-6 mx-auto"-->
+            </div>
+            <!--/row-->
+        </div>
+        <!--/col-->
+    </div>
+    <!--/row-->
+</div>
+<!--/container-->
+
+{{ template "footer" }}

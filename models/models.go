@@ -24,7 +24,7 @@ type Config struct {
 //NullTime special type for scan sql rows with Null data for time type variables
 type NullTime struct {
 	Time  time.Time `json:"time"`
-	Valid bool `json:"valid"` // Valid is true if Time is not NULL
+	Valid bool      `json:"valid"` // Valid is true if Time is not NULL
 }
 
 // Scan implements the Scanner interface.
@@ -42,41 +42,40 @@ func (nt NullTime) Value() (driver.Value, error) {
 }
 
 type DbUsers struct {
-	ID         int `json:"id"`
-	TelegramID int `json:"telegram_id"`
-	FirstName  string `json:"first_name"`
-	LastName   string `json:"last_name"`
-	Admin      int `json:"admin"`
-	Status     string `json:"status"`
-	ChangedBy  int `json:"changed_by"`
+	ID         int      `json:"id"`
+	TelegramID int      `json:"telegram_id"`
+	FirstName  string   `json:"first_name"`
+	LastName   string   `json:"last_name"`
+	Admin      int      `json:"admin"`
+	Status     string   `json:"status"`
+	ChangedBy  int      `json:"changed_by"`
 	ChangedAt  NullTime `json:"changed_at"`
-	Comment    string `json:"comment"`
-	Userpic    string `json:"userpic"`
-	Password string `json:"password"`
+	Comment    string   `json:"comment"`
+	Userpic    string   `json:"userpic"`
 }
 
 type DbTasks struct {
-	ID          int `json:"id"`
-	FromUser    int `json:"from_user"`
-	ToUser      int `json:"to_user"`
-	Status      string `json:"status"`
+	ID          int      `json:"id"`
+	FromUser    int      `json:"from_user"`
+	ToUser      int      `json:"to_user"`
+	Status      string   `json:"status"`
 	ChangedAt   NullTime `json:"changed_at"`
-	ChangedBy   int `json:"changed_by"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Comment     string `json:"comment"`
+	ChangedBy   int      `json:"changed_by"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Comment     string   `json:"comment"`
 	CommentedAt NullTime `json:"commented_at"`
-	CommentedBy int `json:"commented_by"`
-	Images      string `json:"images"`
-	Documents   string `json:"documents"`
+	CommentedBy int      `json:"commented_by"`
+	Images      string   `json:"images"`
+	Documents   string   `json:"documents"`
 }
 
 type DbTaskHistory struct {
-	ID     int `json:"id"`
-	TaskID int `json:"task_id"`
-	UserID int `json:"user_id"`
+	ID     int      `json:"id"`
+	TaskID int      `json:"task_id"`
+	UserID int      `json:"user_id"`
 	Date   NullTime `json:"date"`
-	Status string `json:"status"`
+	Status string   `json:"status"`
 }
 
 type DbTaskComments struct {
@@ -167,8 +166,8 @@ type Buttons struct {
 
 type DbHistory struct {
 	HDb DbTaskHistory `json:"h_db"`
-	TDb DbTasks `json:"t_db"`
-	UDb DbUsers `json:"u_db"`
+	TDb DbTasks       `json:"t_db"`
+	UDb DbUsers       `json:"u_db"`
 }
 
 type DbComment struct {
@@ -178,19 +177,19 @@ type DbComment struct {
 }
 
 type DbAuth struct {
-	ID int
-	Token string
+	ID         int
+	Token      string
 	ExpiryDate NullTime
 	TelegramID int
-	Approved int
+	Approved   int
 }
 
 type DbSessions struct {
-	ID int
-	UUID string
-	TelegramID int
-	StartedAt NullTime
+	ID           int
+	UUID         string
+	TelegramID   int
+	StartedAt    NullTime
 	LastActivity NullTime
-	IP string
-	UserAgent string
+	IP           string
+	UserAgent    string
 }

@@ -6,7 +6,7 @@ import (
 )
 
 func ScanUser(rows *sql.Rows, u *models.DbUsers) error {
-	return rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName, &u.Admin, &u.Status, &u.ChangedBy, &u.ChangedAt, &u.Comment, &u.Userpic, &u.Password)
+	return rows.Scan(&u.ID, &u.TelegramID, &u.FirstName, &u.LastName, &u.Admin, &u.Status, &u.ChangedBy, &u.ChangedAt, &u.Comment, &u.Userpic)
 }
 
 func ScanTask(rows *sql.Rows, t *models.DbTasks) error {

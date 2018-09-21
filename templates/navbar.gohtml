@@ -13,18 +13,18 @@
             </li>
         {{end}}
         </ul>
-        <ul class="navbar-nav flex-row ml-md-auto d-none d-md-flex">
 
+        <ul class="navbar-nav flex-row ml-md-auto d-none d-md-flex">
         {{if eq .LoggedIn true}}
             <li class="nav-item dropdown">
                 <a class="nav-item dropdown-toggle mr-md-2" href="#" id="userMenu" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    <img src="/public/userpics/{{.User.Userpic}}" alt="user picture" class="userpic-40">
+                    <img src="/public/userpics/{{if eq .User.Userpic ""}}default.png{{else}}{{.User.ID}}/{{.User.Userpic}}{{end}}" alt="user picture" class="userpic-40">
                 </a>
                 <div class="dropdown-menu dropdown-menu-right" aria-labelledby="userMenu">
                     <a class="dropdown-item" href="#"><b>{{.User.FirstName}} {{.User.LastName}}</b></a>
                     <div class="dropdown-divider"></div>
+                    <a class="dropdown-item" href="/user?id={{.User.TelegramID}}">Edit</a>
                     <a class="dropdown-item" href="/logout"><i class="fa fa-sign-out-alt"></i> Logout</a>
-                    <a class="dropdown-item" href="#">Empty</a>
                 </div>
             </li>
         {{else}}

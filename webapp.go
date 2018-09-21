@@ -7,8 +7,10 @@ import (
 	"github.com/satori/go.uuid"
 	"github.com/slevchyk/taskeram/dbase"
 	"github.com/slevchyk/taskeram/models"
+	"github.com/slevchyk/teacherTools/utils"
 	"gopkg.in/telegram-bot-api.v4"
 	"html/template"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
@@ -18,6 +20,7 @@ import (
 
 func startWebApp() {
 
+	http.Handle("/public/", http.StripPrefix("/public", http.FileServer(http.Dir("./public"))))
 	http.Handle("/assets/", http.StripPrefix("/assets", http.FileServer(http.Dir("./assets"))))
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/login", loginHandler)
@@ -25,13 +28,53 @@ func startWebApp() {
 	http.HandleFunc("/logout", logoutHandler)
 	http.HandleFunc("/tasks", tasksHandler)
 	http.HandleFunc("/task", taskHanlder)
+	http.HandleFunc("/user", userHanlder)
 	http.HandleFunc("/api/history", apiHistoryHandler)
 	http.HandleFunc("/api/updatetaskstatus", apiUpdateTaskStatusHandler)
+	http.HandleFunc("/api/commenttask", apiCommentTaskHandler)
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		panic(err)
 	}
 }
+
+func apiCommentTaskHandler(w http.ResponseWriter, r *http.Request) {
+
+	sessionUUID := r.FormValue("session")
+	taskIDValue := r.FormValue("id")
+
+	commentByte, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	comment := string(commentByte)
+
+	if sessionUUID == "" || taskIDValue == "" || comment == "" {
+		return
+	}
+
+	loggedIn, user := alreadyLoggedIn(w, r, sessionUUID)
+	if !loggedIn {
+		return
+	}
+
+	taskID, err := strconv.Atoi(taskIDValue)
+	if err != nil {
+		return
+	}
+
+	stmt, err := dbase.UpdateTaskComment(cfg)
+	if err != nil {
+		return
+	}
+
+	_, err = stmt.Exec(comment, time.Now().UTC(), user.TelegramID, taskID)
+	if err != nil {
+		return
+	}
+}
+
 func apiUpdateTaskStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	sessionUUID := r.FormValue("session")
@@ -93,11 +136,13 @@ func apiHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		err := dbase.ScanHistory(rows, &record)
 		if err != nil {
+			rows.Close()
 			return
 		}
 
 		xs = append(xs, record)
 	}
+	rows.Close()
 
 	json.NewEncoder(w).Encode(xs)
 }
@@ -111,7 +156,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	}
 
-	td.NavBar.MainMenu = getMainMenu()
+	td.NavBar.MainMenu = getMainMenu("")
 	td.NavBar.LoggedIn = loggedIn
 	td.NavBar.User = user
 
@@ -375,15 +420,19 @@ func tasksHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		i++
-		sr = append(sr, models.TasksRow{Number: i, Tasks: t})
+
+		tu := dbase.GetUserByTelegramID(cfg, t.ToUser)
+		fu := dbase.GetUserByTelegramID(cfg, t.FromUser)
+
+		sr = append(sr, models.TasksRow{Number: i, Task: t, ToUser: tu, FromUser: fu})
 	}
 	rows.Close()
 
-	td.NavBar.MainMenu = getMainMenu()
+	td.NavBar.MainMenu = getMainMenu(taskType)
 	td.Tabs = template.HTML(getTasksTabs(taskType, taskStatus))
 	td.Rows = sr
 
-	err = tpl.ExecuteTemplate(w, "inbox.gohtml", td)
+	err = tpl.ExecuteTemplate(w, "tasks.gohtml", td)
 	if err != nil {
 		log.Println(err)
 	}
@@ -462,7 +511,7 @@ func taskHanlder(w http.ResponseWriter, r *http.Request) {
 		}
 
 		informNewTask(newTaskID, t, user, u)
-		http.Redirect(w, r, fmt.Sprintf("/tasks?type=sent&status=%v", models.TaskStatusNew), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/tasks?type=sent&status=%v", strings.ToLower(models.TaskStatusNew)), http.StatusSeeOther)
 	case "update":
 
 		var t models.DbTasks
@@ -582,16 +631,71 @@ func taskHanlder(w http.ResponseWriter, r *http.Request) {
 		}
 
 		td.Task = t
+		td.ToUser = dbase.GetUserByTelegramID(cfg, t.ToUser)
+		td.FromUser = dbase.GetUserByTelegramID(cfg, t.FromUser)
+		td.CommentedBy = dbase.GetUserByTelegramID(cfg, t.CommentedBy)
 	}
 
 	td.NavBar.LoggedIn = loggedIn
 	td.NavBar.User = user
-	td.NavBar.MainMenu = getMainMenu()
+	td.NavBar.MainMenu = getMainMenu("new")
 
 	err = tpl.ExecuteTemplate(w, "task.gohtml", td)
 	if err != nil {
 		log.Println(err)
 	}
+}
+
+func userHanlder(w http.ResponseWriter, r *http.Request) {
+
+	var td models.TplUser
+
+	loggedIn, user := alreadyLoggedIn(w, r, "")
+	if !loggedIn {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	}
+
+	tgidString := r.FormValue("id")
+	tgid, err := strconv.Atoi(tgidString)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	if user.TelegramID != tgid && user.Admin != 1 {
+
+	}
+
+
+	if 1 == 1 {
+		mf, fh, err := r.FormFile("userpic")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		userUserpic, err := utils.UpdateUserpic(mf, fh, u)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		if userUserpic != u.Userpic && userUserpic != "defaultuserpic.png" {
+			_, err = db.Query(dbase.UpdateUser(), t.UserID, u.Email, u.FirstName, u.LastName, userUserpic)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+		}
+	}
+
+	td.NavBar.LoggedIn = loggedIn
+	td.NavBar.MainMenu = getMainMenu("")
+	td.NavBar.User = user
+
+	td.User = user
+
+	err := tpl.ExecuteTemplate(w, "user.gohtml", td)
+	if err != nil {
+		log.Println(err)
+	}
+
 }
 
 func getTasksTabs(taskType string, status string) string {
@@ -632,33 +736,31 @@ func isStatusActive(currentStatus string, status string) string {
 	return ""
 }
 
-func getMainMenu() []models.TplMainMenu {
+func getMainMenu(curremtMenu string) []models.TplMainMenu {
 
 	var mm []models.TplMainMenu
+	var m models.TplMainMenu
 
-	mm = append(mm, struct {
-		Link  string
-		Alias string
-	}{
-		Link:  "/task",
-		Alias: "New",
-	})
+	m.Link = "/task"
+	m.Alias = `<i class="far fa-file"></i> New`
+	if curremtMenu == "new" {
+		m.Alias += `<span class="sr-only">(current)</span>`
+	}
+	mm = append(mm, m)
 
-	mm = append(mm, struct {
-		Link  string
-		Alias string
-	}{
-		Link:  "/tasks?type=inbox",
-		Alias: "Inbox",
-	})
+	m.Link = "/tasks?type=inbox"
+	m.Alias = "Inbox"
+	if curremtMenu == "inbox" {
+		m.Alias += `<span class="sr-only">(current)</span>`
+	}
+	mm = append(mm, m)
 
-	mm = append(mm, struct {
-		Link  string
-		Alias string
-	}{
-		Link:  "/tasks?type=sent",
-		Alias: "Sent",
-	})
+	m.Link = "/tasks?type=sent"
+	m.Alias = "Sent"
+	if curremtMenu == "sent" {
+		m.Alias += `<span class="sr-only">(current)</span>`
+	}
+	mm = append(mm, m)
 
 	return mm
 }

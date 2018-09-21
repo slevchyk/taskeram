@@ -1,0 +1,37 @@
+{{ template "header"}}
+
+{{ template "navbar" .NavBar}}
+
+<div class="container">
+
+    {{.Tabs}}
+
+    <div class="row">
+        <table class="table table-striped">
+            <thead class="thead-dark">
+            <tr>
+                <th scope="col">#</th>
+                <th scope="col">task</th>
+                <th scope="col">from</th>
+                <th scope="col">title</th>
+                <th scope="col">description</th>
+            </tr>
+            </thead>
+
+        {{if .}}
+            {{range .Rows}}
+                <tr>
+                    <td>{{.Number}}</td>
+                    <td><a href="/task?id={{.Task.ID}}">{{.Task.ID}}</a></td>
+                    <td>{{.FromUser.FirstName}} {{.FromUser.LastName}}</td>
+                    <td>{{.Task.Title}}</td>
+                    <td>{{.Task.Description}}</td>
+                </tr>
+            {{end}}
+        {{end}}
+
+        </table>
+    </div>
+</div>
+
+{{ template "footer" }}

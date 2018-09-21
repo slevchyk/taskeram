@@ -7,7 +7,7 @@ import (
 
 func InsertUserExec(stmt *sql.Stmt, u models.DbUsers) (sql.Result, error) {
 
-	return stmt.Exec(u.TelegramID, u.FirstName, u.LastName, u.Admin, u.Status, u.ChangedAt.Time, u.ChangedBy, u.Comment, u.Userpic, u.Password)
+	return stmt.Exec(u.TelegramID, u.FirstName, u.LastName, u.Admin, u.Status, u.ChangedAt.Time, u.ChangedBy, u.Comment, u.Userpic)
 }
 
 func InsertTaskExec(stmt *sql.Stmt, t models.DbTasks) (sql.Result, error) {

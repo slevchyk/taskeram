@@ -19,7 +19,7 @@
                             <div class="card-body">
                                 <div class="form-group">
                                     <label for="toUser">To user</label>
-                                    <input type="text" class="form-control" disabled id="toUser" value="{{.Task.ToUser}}">
+                                    <input type="text" class="form-control" disabled id="toUser" value="{{.ToUser.FirstName}} {{.ToUser.LastName}}">
                                 </div>
 
                                 <div class="form-group">
@@ -34,7 +34,7 @@
 
                                 {{if ne .Task.Comment ""}}
                                     <div class="form-group">
-                                        <label for="comments">Commented by {{.Task.CommentedBy}} at {{.Task.CommentedAt.Time}}</label>
+                                        <label for="comments">Last comment by {{.CommentedBy.FirstName}} {{.CommentedBy.LastName}} at {{.Task.CommentedAt.Time}}</label>
                                         <textarea class="form-control" rows="2" id="comments" disabled>{{.Task.Comment}}</textarea>
                                     </div>
                                 {{end}}
@@ -65,11 +65,18 @@
                                             </button>
                                         {{end}}
 
+                                        {{if eq .Action "comment"}}
+                                            <button type="button" class="btn btn-light" data-toggle="modal" data-target="#commentModal">
+                                                {{.Alias}}
+                                            </button>
+                                        {{end}}
+
                                         {{if eq .Action "history"}}
                                             <button onClick="getHistory({{$TaskID}}, 'pTaskHistory');" type="button" class="btn btn-light" data-toggle="modal" data-target="#historyModal">
                                                 {{.Alias}}
                                             </button>
                                         {{end}}
+
                                     {{end}}
                                 </div>
 
@@ -137,10 +144,33 @@
                 {{/*</button>*/}}
             </div>
             <div class="modal-body">
-                <p id="pTaskHistory"></p>
+                <p id="pTaskHistory">loading...</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" id="commentModal" tabindex="-1" role="dialog" aria-labelledby="commentModal" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Comment to Task #{{$TaskID}}</h5>
+            </div>
+            <div class="modal-body">
+                <form>
+                    <div class="form-group">
+                        <label for="new-comment" class="col-form-label">Message:</label>
+                        <textarea class="form-control" id="new-comment"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-dismiss="modal">Close</button>
+                <button onclick="setTaskComment({{$TaskID}}, 'new-comment');" type="button" class="btn btn-primary" data-dismiss="modal">Send message</button>
             </div>
         </div>
     </div>

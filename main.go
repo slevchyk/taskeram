@@ -173,7 +173,7 @@ func initData() {
 	sentRules[models.TaskStatusNew] = models.AllowedActions{models.Close, models.Comment, models.History}
 	sentRules[models.TaskStatusStarted] = models.AllowedActions{models.Close, models.Comment, models.History}
 	sentRules[models.TaskStatusRejected] = models.AllowedActions{models.Close, models.Comment, models.History}
-	sentRules[models.TaskStatusCompleted] = models.AllowedActions{models.Reject, models.Comment, models.Close, models.History}
+	sentRules[models.TaskStatusCompleted] = models.AllowedActions{models.Reject, models.Close, models.Comment, models.History}
 	sentRules[models.TaskStatusClosed] = models.AllowedActions{models.History}
 	taskRules["Sent"] = sentRules
 

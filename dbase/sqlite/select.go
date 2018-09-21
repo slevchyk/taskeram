@@ -195,8 +195,7 @@ func SelectUsersByTelegramID(db *sql.DB, tgid int) (*sql.Rows, error) {
 			u.changed_by,
 			u.changed_at,
 			u.comment,
-			u.userpic,
-			u.password		
+			u.userpic		
 		FROM 
 			users u
 		WHERE
@@ -218,8 +217,7 @@ func SelectUsersByStatus(db *sql.DB, status string) (*sql.Rows, error) {
 			u.changed_by,
 			u.changed_at,
 			u.comment,
-			u.userpic,
-			u.password			
+			u.userpic			
 		FROM 
 			users u
 		WHERE
@@ -241,8 +239,7 @@ func SelectUsersByTelegramIDStatus(db *sql.DB, tgid int, status string) (*sql.Ro
 			u.changed_by,
 			u.changed_at,
 			u.comment,
-			u.userpic,
-			u.password	
+			u.userpic	
 		FROM 
 			users u
 		WHERE
@@ -265,8 +262,7 @@ func SelectAdminUsers(db *sql.DB) (*sql.Rows, error) {
 			u.changed_by,
 			u.changed_at,
 			u.comment,
-			u.userpic,
-			u.password			
+			u.userpic			
 		FROM 
 			users u
 		WHERE
@@ -288,8 +284,7 @@ func SelectUsersForBan(db *sql.DB, tgid int) (*sql.Rows, error) {
 			u.changed_by,
 			u.changed_at,
 			u.comment,
-			u.userpic,
-			u.password		
+			u.userpic		
 		FROM 
 			users u
 		WHERE
@@ -312,8 +307,7 @@ func SelectUsersForUnban(db *sql.DB, tgid int) (*sql.Rows, error) {
 			u.changed_by,
 			u.changed_at,
 			u.comment,
-			u.userpic,
-			u.password	
+			u.userpic	
 		FROM 
 			users u
 		WHERE
@@ -363,7 +357,7 @@ func SelectTasksByIDUserTelegramID(db *sql.DB, taskID int, tgid int) (*sql.Rows,
 			t.commented_at,
 			t.commented_by,
 			t.images,
-			t.documents			
+			t.documents		
 		FROM tasks t
 		WHERE
 			t.id=?
@@ -518,8 +512,7 @@ func SelectUsersBySessionUUID(db *sql.DB, uuid string) (*sql.Rows, error) {
 			u.changed_by,
 			u.changed_at,
 			u.comment,
-			u.userpic,
-			u.password	
+			u.userpic	
 		FROM sessions s
 			LEFT JOIN users u
 			ON s.tgid = u.tgid
