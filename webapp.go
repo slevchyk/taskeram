@@ -32,7 +32,7 @@ func startWebApp() {
 	http.HandleFunc("/api/history", apiHistoryHandler)
 	http.HandleFunc("/api/updatetaskstatus", apiUpdateTaskStatusHandler)
 	http.HandleFunc("/api/commenttask", apiCommentTaskHandler)
-	err := http.ListenAndServe(":8080", nil)
+	err := http.ListenAndServe(":80", nil)
 	if err != nil {
 		panic(err)
 	}
@@ -674,8 +674,13 @@ func userHanlder(w http.ResponseWriter, r *http.Request) {
 		u = dbase.GetUserByTelegramID(cfg, tgid)
 	}
 
-	//на поновлення ми отримала користувача до якого є дсотуп і такий є а базі, то можемо його поновити
+	//якщо для поновлення ми отримали того ж користувача що є залогіненим
+	//чи ми не знайшли по ID такого, то використаємо того що вже є
+	if user.TelegramID == tgid || u.ID == 0 {
+		u = user
+	}
 
+	//на поновлення ми отримала користувача до якого є доcтуп і такий є а базі, то можемо його поновити
 	if u.ID != 0 {
 		do := r.FormValue("do")
 
@@ -733,12 +738,6 @@ func userHanlder(w http.ResponseWriter, r *http.Request) {
 
 			http.Redirect(w, r, fmt.Sprintf("/user?id=%v", u.TelegramID), http.StatusSeeOther)
 		}
-	}
-
-	//якщо для поновлення ми отримали того ж користувача що є залогіненим
-	//чи ми не знайшли по ID такого, то використаємо того що вже є
-	if user.TelegramID == tgid || u.ID == 0 {
-		u = user
 	}
 
 	td.NavBar.LoggedIn = loggedIn

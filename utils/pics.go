@@ -79,7 +79,11 @@ func UploadUserpic(mf multipart.File, fh *multipart.FileHeader, userPath string)
 		return "", err
 	}
 
-	pathOrigin := filepath.Join(wd, "public", "userpics", userPath, imgHash + "-origin." + imgExt)
+	if CheckCreatePath(filepath.Join(wd, "public", "userpics", userPath)) != nil {
+		return "", err
+	}
+
+	pathOrigin := filepath.Join(wd, "public", "userpics", userPath, imgHash+"-origin."+imgExt)
 	path := filepath.Join(wd, "public", "userpics", userPath, imgName)
 
 	newFileOrigin, err := os.Create(pathOrigin)
@@ -150,4 +154,13 @@ func UpdateUserpic(mf multipart.File, fh *multipart.FileHeader, u models.DbUsers
 	}
 
 	return UploadUserpic(mf, fh, strconv.Itoa(u.ID))
+}
+
+func CheckCreatePath(path string) error {
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return os.MkdirAll(path, os.ModePerm)
+	}
+
+	return nil
 }
