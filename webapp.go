@@ -7,7 +7,7 @@ import (
 	"github.com/satori/go.uuid"
 	"github.com/slevchyk/taskeram/dbase"
 	"github.com/slevchyk/taskeram/models"
-	"github.com/slevchyk/teacherTools/utils"
+	"github.com/slevchyk/taskeram/utils"
 	"gopkg.in/telegram-bot-api.v4"
 	"html/template"
 	"io/ioutil"
@@ -649,6 +649,8 @@ func taskHanlder(w http.ResponseWriter, r *http.Request) {
 func userHanlder(w http.ResponseWriter, r *http.Request) {
 
 	var td models.TplUser
+	var u models.DbUsers
+	var err error
 
 	loggedIn, user := alreadyLoggedIn(w, r, "")
 	if !loggedIn {
@@ -662,40 +664,93 @@ func userHanlder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if user.TelegramID != tgid && user.Admin != 1 {
-
+		http.Error(w, "Access denied", http.StatusNotFound)
+		return
 	}
 
+	//якщо для поновлення ми отримали того ж користувача що є залогіненим не будемо зе раз шукати його в базі
+	//використаємо того що вже є
+	if user.TelegramID != tgid {
+		u = dbase.GetUserByTelegramID(cfg, tgid)
+	}
 
-	if 1 == 1 {
-		mf, fh, err := r.FormFile("userpic")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+	//на поновлення ми отримала користувача до якого є дсотуп і такий є а базі, то можемо його поновити
 
-		userUserpic, err := utils.UpdateUserpic(mf, fh, u)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+	if u.ID != 0 {
+		do := r.FormValue("do")
 
-		if userUserpic != u.Userpic && userUserpic != "defaultuserpic.png" {
-			_, err = db.Query(dbase.UpdateUser(), t.UserID, u.Email, u.FirstName, u.LastName, userUserpic)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+		switch do {
+		case "update":
+
+			needUpadte := false
+
+			firstName := r.FormValue("firstName")
+			lastName := r.FormValue("lastName")
+
+			if firstName != "" && u.FirstName != firstName {
+				needUpadte = true
+				u.FirstName = firstName
 			}
+
+			if lastName != "" && u.LastName != lastName {
+				needUpadte = true
+				u.LastName = lastName
+			}
+
+			var userpic string
+
+			mf, fh, err := r.FormFile("userpic")
+			if err == nil {
+				userpic, err = utils.UpdateUserpic(mf, fh, u)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+			}
+
+			if userpic != "" && u.Userpic != userpic {
+				needUpadte = true
+				u.Userpic = userpic
+			}
+
+			if needUpadte {
+				stmt, err := dbase.UpdateUserData(cfg)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+
+				_, err = stmt.Exec(u.FirstName, u.LastName, u.Userpic, u.TelegramID)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+			}
+
+			if u.ID == user.ID {
+				user = u
+			}
+
+			http.Redirect(w, r, fmt.Sprintf("/user?id=%v", u.TelegramID), http.StatusSeeOther)
 		}
+	}
+
+	//якщо для поновлення ми отримали того ж користувача що є залогіненим
+	//чи ми не знайшли по ID такого, то використаємо того що вже є
+	if user.TelegramID == tgid || u.ID == 0 {
+		u = user
 	}
 
 	td.NavBar.LoggedIn = loggedIn
 	td.NavBar.MainMenu = getMainMenu("")
 	td.NavBar.User = user
 
-	td.User = user
+	td.User = u
 
-	err := tpl.ExecuteTemplate(w, "user.gohtml", td)
+	err = tpl.ExecuteTemplate(w, "user.gohtml", td)
 	if err != nil {
 		log.Println(err)
 	}
-
 }
 
 func getTasksTabs(taskType string, status string) string {

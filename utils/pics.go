@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
+	"github.com/slevchyk/taskeram/models"
 	"image"
 	"image/draw"
 	"image/jpeg"
@@ -11,10 +12,10 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/nfnt/resize"
-	"github.com/slevchyk/teacherTools/models"
 )
 
 func CropCenteredSquare(src image.Image) *image.NRGBA {
@@ -52,7 +53,7 @@ func CropCenteredSquare(src image.Image) *image.NRGBA {
 	return dst
 }
 
-func UploadUserpic(mf multipart.File, fh *multipart.FileHeader) (string, error) {
+func UploadUserpic(mf multipart.File, fh *multipart.FileHeader, userPath string) (string, error) {
 
 	var err error
 
@@ -78,8 +79,8 @@ func UploadUserpic(mf multipart.File, fh *multipart.FileHeader) (string, error) 
 		return "", err
 	}
 
-	pathOrigin := filepath.Join(wd, "public", "userpics", imgHash+"-origin."+imgExt)
-	path := filepath.Join(wd, "public", "userpics", imgName)
+	pathOrigin := filepath.Join(wd, "public", "userpics", userPath, imgHash + "-origin." + imgExt)
+	path := filepath.Join(wd, "public", "userpics", userPath, imgName)
 
 	newFileOrigin, err := os.Create(pathOrigin)
 	if err != nil {
@@ -124,13 +125,13 @@ func UploadUserpic(mf multipart.File, fh *multipart.FileHeader) (string, error) 
 	return imgName, nil
 }
 
-func UpdateUserpic(mf multipart.File, fh *multipart.FileHeader, u models.Users) (string, error) {
+func UpdateUserpic(mf multipart.File, fh *multipart.FileHeader, u models.DbUsers) (string, error) {
 
 	if fh.Filename == "" {
-		return u.Userpic, nil
+		return "", nil
 	}
 
-	if u.Userpic != "" && u.Userpic != "defaultuserpic.png" {
+	if u.Userpic != "" && u.Userpic != "default.png" {
 		fmt.Println(u.Userpic)
 		slImg := strings.Split(u.Userpic, ".")
 		imgName := slImg[0]
@@ -148,5 +149,5 @@ func UpdateUserpic(mf multipart.File, fh *multipart.FileHeader, u models.Users) 
 		_ = os.Remove(pathOrigin)
 	}
 
-	return UploadUserpic(mf, fh)
+	return UploadUserpic(mf, fh, strconv.Itoa(u.ID))
 }

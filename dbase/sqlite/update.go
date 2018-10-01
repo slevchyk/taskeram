@@ -16,6 +16,20 @@ func UpdateUserStatus(db *sql.DB) (*sql.Stmt, error) {
 			`)
 }
 
+func UpdateUserData(db *sql.DB) (*sql.Stmt, error) {
+
+	return db.Prepare(`
+			UPDATE
+				users
+			SET
+				first_name=?,
+				last_name=?,
+				userpic=?
+			WHERE
+				tgid=? 
+			`)
+}
+
 func UpdateTaskStatus(db *sql.DB) (*sql.Stmt, error) {
 
 	return db.Prepare(`

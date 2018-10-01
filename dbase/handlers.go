@@ -201,6 +201,21 @@ func UpdateUserStatus(cfg models.Config) (*sql.Stmt, error) {
 	}
 }
 
+//UpdateUserStatus - for changing user status. Uses 4 params
+//1. New user First name
+//2. New user Last name
+//3. New Userpic
+//4. User Telegram ID
+func UpdateUserData(cfg models.Config) (*sql.Stmt, error) {
+
+	switch cfg.Database.Type {
+	case "sqlite":
+		return  sqlite.UpdateUserData(cfg.DB)
+	default:
+		return  sqlite.UpdateUserData(cfg.DB)
+	}
+}
+
 //UpdateTaskStatus is for changing task status. Uses 4 params
 //1. New status
 //2. When status was add
