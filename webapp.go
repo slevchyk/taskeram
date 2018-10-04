@@ -248,7 +248,7 @@ func authHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, err = dbase.InsertSessionExec(stmt, s)
+		_, err = dbase.ExecInsertSession(stmt, s)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -319,7 +319,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, err = dbase.InsertAuthExec(stmt, a)
+		_, err = dbase.ExecInsertAuth(stmt, a)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -498,7 +498,7 @@ func taskHanlder(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		res, err := dbase.InsertTaskExec(stmt, t)
+		res, err := dbase.ExecInsertTask(stmt, t)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Adding new task. Inserting (commit) new task. Err: %v", err), http.StatusInternalServerError)
 			return
@@ -573,7 +573,7 @@ func taskHanlder(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			_, err = dbase.UpdateTaskStatusExec(stmt, t)
+			_, err = dbase.ExecUpdateTaskStatus(stmt, t)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -790,28 +790,28 @@ func isStatusActive(currentStatus string, status string) string {
 	return ""
 }
 
-func getMainMenu(curremtMenu string) []models.TplMainMenu {
+func getMainMenu(currentMenu string) []models.TplMainMenu {
 
 	var mm []models.TplMainMenu
 	var m models.TplMainMenu
 
 	m.Link = "/task"
 	m.Alias = `<i class="far fa-file"></i> New`
-	if curremtMenu == "new" {
+	if currentMenu == "new" {
 		m.Alias += `<span class="sr-only">(current)</span>`
 	}
 	mm = append(mm, m)
 
 	m.Link = "/tasks?type=inbox"
 	m.Alias = "Inbox"
-	if curremtMenu == "inbox" {
+	if currentMenu == "inbox" {
 		m.Alias += `<span class="sr-only">(current)</span>`
 	}
 	mm = append(mm, m)
 
 	m.Link = "/tasks?type=sent"
 	m.Alias = "Sent"
-	if curremtMenu == "sent" {
+	if currentMenu == "sent" {
 		m.Alias += `<span class="sr-only">(current)</span>`
 	}
 	mm = append(mm, m)

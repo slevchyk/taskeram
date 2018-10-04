@@ -1,4 +1,4 @@
-package sqlite
+package postgres
 
 import "database/sql"
 
@@ -16,14 +16,14 @@ func InsertUser(db *sql.DB) (*sql.Stmt, error)  {
 				changed_by,
 				comment,
 				userpic)
-		VALUES (?, ?, ?, ?, ?, ?. ?, ?, ?);`)
+		VALUES ($1, $2, $3, $4, $5, $6. $7, $8, $9);`)
 }
 
 func InsertTask(db *sql.DB) (*sql.Stmt, error) {
 
 	return db.Prepare(`
 		INSERT INTO
-			'tasks'(
+			tasks(
 				from_user,
 				to_user,
 				status,
@@ -36,31 +36,31 @@ func InsertTask(db *sql.DB) (*sql.Stmt, error) {
 				commented_by,
 				images,
 				documents)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`)
+		VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);`)
 }
 
 func InsertAuth(db *sql.DB) (*sql.Stmt, error) {
 
 	return db.Prepare(`
 		INSERT INTO 
-			'auth' (
+			auth (
 				token,
 				expiry_date,
 				tgid,
 				approved)
-		VALUES (?, ?, ?, ?);`)
+		VALUES ($1, $2, $3, $4);`)
 }
 
 func InsertSession(db *sql.DB) (*sql.Stmt, error) {
 
 	return db.Prepare(`
 		INSERT INTO 
-			'sessions' (
+			sessions (
 				uuid,
 				tgid,
 				started_at,
 				last_activity,
 				ip,
 				user_agent)
-		VALUES (?, ?, ?, ?, ?, ?);`)
+		VALUES ($1, $2, $3, $4, $5, $6);`)
 }

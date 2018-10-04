@@ -13,6 +13,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	"github.com/slevchyk/taskeram/dbase"
 	"github.com/slevchyk/taskeram/models"
 	"gopkg.in/telegram-bot-api.v4"
@@ -2103,7 +2104,7 @@ func handleNew(c *models.UserCache) {
 				Description: c.NewTask.Description,
 			}
 
-			res, err := dbase.InsertTaskExec(stmt, nt)
+			res, err := dbase.ExecInsertTask(stmt, nt)
 			//res, err := stmt.Exec(c.User.TelegramID, toUser.TelegramID, models.TaskStatusNew, createdAt, c.User.TelegramID, c.NewTask.Title, c.NewTask.Description)
 			if err != nil {
 				c.NewTask.Step = models.NewTaskStepUser
@@ -2480,7 +2481,7 @@ func newUserAdd(c *models.UserCache) {
 		},
 	}
 
-	res, err := dbase.InsertUserExec(stmt, nu)
+	res, err := dbase.ExecInsertUser(stmt, nu)
 	//res, err := stmt.Exec(c.User.TelegramID, c.User.FirstName, c.User.LastName, models.UserRequested, c.User.TelegramID, time.Now().UTC())
 	if err != nil {
 		cbConfig.Text = fmt.Sprintf("Dear, %s %s. sorry, somethings went wrong. Try make request later", c.User.FirstName, c.User.LastName)
